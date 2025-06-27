@@ -1,0 +1,16 @@
+# Ignore media files and large assets
+Files for SocialVideoBot/
+*.mp4
+*.mov
+*.avi
+*.mp3
+*.zip
+
+# Ignore Python temp and environments
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# VS Code settings
+.vscode/
