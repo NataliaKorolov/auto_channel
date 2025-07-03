@@ -6,7 +6,8 @@ from moviepy.video.io.VideoFileClip import VideoFileClip
 from moviepy.audio.io.AudioFileClip import AudioFileClip
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
 from moviepy.video.VideoClip import TextClip
-from moviepy import TextClip, CompositeVideoClip, vfx
+from moviepy import TextClip, CompositeVideoClip
+
 
 # No need to import "moviepy.video.fx.all" directly.
 # All required effects (like fadein) are imported individually above.
@@ -92,13 +93,19 @@ def make_and_export(output_file: str, size: Tuple[int, int], resize_dim: str) ->
         return
 
     final_clip = concatenate_videoclips(clips, method="compose")
-    if final_clip.duration < MIN_DURATION:
-        loops = int(MIN_DURATION // final_clip.duration) + 1
-        final_clip = concatenate_videoclips([final_clip] * loops, method="compose")
-    final_clip = final_clip.subclipped(0, MIN_DURATION)
+    video_duration = final_clip.duration
+
+    if video_duration < MIN_DURATION:
+        print(f"Warning: Final video duration ({video_duration:.2f}s) is shorter than MIN_DURATION ({MIN_DURATION}s).")
+    else:
+        print(f"Final video duration: {video_duration:.2f}s")
 
     try:
-        audio_clip = AudioFileClip(AUDIO_PATH).subclipped(0, MIN_DURATION)
+        audio_clip = AudioFileClip(AUDIO_PATH)
+        audio_duration = audio_clip.duration
+        if audio_duration > video_duration:
+            print(f"Warning: Audio duration ({audio_duration:.2f}s) is longer than video duration ({video_duration:.2f}s). Audio will be cut to video length.")
+            audio_clip = audio_clip.set_duration(video_duration)
         final_with_audio = final_clip.with_audio(audio_clip)
         final_with_audio.write_videofile(
             output_file,
@@ -113,62 +120,7 @@ def make_and_export(output_file: str, size: Tuple[int, int], resize_dim: str) ->
     except Exception as e:
         print(f"Error exporting video: {e}")
 
-def make_and_export_blur(output_file: str, size: Tuple[int, int]) -> None:
-    """Create and export a video with blurred background effect."""
-    try:
-        import cv2
-    except ImportError:
-        print("OpenCV (cv2) is not installed. Please run 'pip install opencv-python'.")
-        return
 
-    clips = []
-    for path in VIDEO_PATHS:
-        if not os.path.exists(path):
-            print(f"Warning: {path} not found. Skipping.")
-            continue
-        try:
-            clip = VideoFileClip(path)
-            fg_clip = clip.resized(width=size[0])
-            if hasattr(clip, 'fl_image'):
-                def blur_frame(frame):
-                    return cv2.GaussianBlur(frame, (99, 99), 50)
-                bg_clip = clip.resized(height=size[1]).fl_image(blur_frame)
-                bg_clip = bg_clip.set_position((0, 0)).set_opacity(1)
-            else:
-                from moviepy.video.VideoClip import ColorClip
-                bg_clip = ColorClip(size=size, color=(0, 0, 0)).with_duration(clip.duration)
-            fg_y = (size[1] - fg_clip.h) // 2
-            fg_clip = fg_clip.set_position((0, fg_y))
-            comp = CompositeVideoClip([bg_clip, fg_clip], size=size).set_duration(clip.duration)
-            clips.append(comp)
-        except Exception as e:
-            print(f"Error processing {path}: {e}")
-
-    if not clips:
-        print("No video clips found. Exiting.")
-        return
-
-    final_clip = concatenate_videoclips(clips, method="compose")
-    if final_clip.duration < MIN_DURATION:
-        loops = int(MIN_DURATION // final_clip.duration) + 1
-        final_clip = concatenate_videoclips([final_clip] * loops, method="compose")
-    final_clip = final_clip.subclipped(0, MIN_DURATION)
-
-    try:
-        audio_clip = AudioFileClip(AUDIO_PATH).subclipped(0, MIN_DURATION)
-        final_with_audio = final_clip.with_audio(audio_clip)
-        final_with_audio.write_videofile(
-            output_file,
-            codec="libx264",
-            audio_codec="aac",
-            preset="ultrafast",
-            bitrate="20000k",
-            audio_fps=44100,
-            logger=None,
-            threads=4
-        )
-    except Exception as e:
-        print(f"Error exporting video: {e}")
 
 if __name__ == "__main__":
     # For vertical 1080x1920 output (TikTok/Instagram), use resize_dim="height"
