@@ -1,18 +1,65 @@
 import os
+import pandas as pd
 from moviepy import concatenate_videoclips
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from moviepy.audio.io.AudioFileClip import AudioFileClip
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
+from moviepy.video.VideoClip import TextClip
 
-BASE = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot"
+BASE = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot\TragicBraveryHector"
 video_paths = [os.path.join(BASE, f"prompt {i}.mp4") for i in range(1, 11)]
 audio_path = os.path.join(BASE, "ElevenLabs_300 Final.mp3")
 
 MIN_DURATION = 60  # seconds
 
+# Path to your CSV and font
+CSV_PATH = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot\TragicBraveryHector\Short_Hector_Video_Texts.csv"
+FONT_PATH = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot\TragicBraveryHector\Cinzel-Regular.ttf"  # Update if needed
+
+def get_texts_from_csv(csv_path):
+    df = pd.read_csv(csv_path)
+    return df['english_text'].tolist()
+
+def add_text_overlay(clip, text_in, size):
+    # Use a simple, widely available system font
+    txt_clip = TextClip(
+        text=text_in, 
+        font="DejaVuSans",  # Safe, bundled with Pillow/Python
+        font_size=50,
+        color='#D4AF37',
+        stroke_color='black',
+        stroke_width=2,
+        method="caption",
+        size=(clip.w * 0.9, None),
+        text_align="center",
+        vertical_align="center",
+        margin=(10,10,10,10)  # left, top, right, bottom padding
+    )
+
+    txt_clip = txt_clip.with_duration(clip.duration)
+
+    # Fade-in effect (crossfadein)
+    #  txt_clip = txt_clip.crossfadein(1)
+
+    # Position: center or slightly lower center
+    # txt_clip = txt_clip.with_position(('center', int(size[1]*0.62)))
+
+
+    # Position slightly higher than bottom to avoid cropping
+    position = ("center", clip.h * 0.75)
+    txt_clip = txt_clip.with_position(position)
+
+    # Optionally add fade-in
+    txt_clip = txt_clip.crossfadein(1.0)
+
+    # Composite the text over the video
+    return CompositeVideoClip([clip, txt_clip.with_start(0)], size=size).with_duration(clip.duration)
+
 def make_and_export(output_file, size, resize_dim):
+    # Load overlay texts
+    texts = get_texts_from_csv(CSV_PATH)
     clips = []
-    for p in video_paths:
+    for idx, p in enumerate(video_paths):
         if not os.path.exists(p):
             print(f"Warning: {p} not found. Skipping.")
             continue
@@ -27,6 +74,13 @@ def make_and_export(output_file, size, resize_dim):
             y1 = max(0, (clip.h - size[1]) // 2)
             y2 = y1 + size[1]
             clip = clip.cropped(y1=y1, y2=y2)
+
+        # Add text overlay if available
+        if idx < len(texts):
+            clip = add_text_overlay(clip, texts[idx], size)
+        else:
+            print(f"Warning: No text for clip {idx+1}")
+
         clips.append(clip)
 
     if not clips:
@@ -111,8 +165,9 @@ def make_and_export_blur(output_file, size):
 
 if __name__ == "__main__":
     # For vertical 1080x1920 output (TikTok/Instagram), always use resize_dim="height"
-    make_and_export(os.path.join(BASE, "final_vertical_1080x1920.mp4"),
-                    (1080, 1920), "height")
+    # make_and_export(os.path.join(BASE, "final_vertical_1080x1920.mp4"),
+    #                 (1080, 1920), "height")
     # For horizontal 1920x1080 output (YouTube), use resize_dim="width" if needed
     make_and_export(os.path.join(BASE, "final_horizontal_1920x1080.mp4"),
                     (1920, 1080), "width")
+
