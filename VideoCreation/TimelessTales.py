@@ -1,4 +1,4 @@
-from video_common import add_text_to_image, TextStyle
+from video_common import add_text_to_image, TextStyle, create_video_with_audio
 import os
 
 audio_path = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot\TT\Voice_Over_RU.mp3" 
@@ -63,3 +63,9 @@ def test_image_text_overlay():
 
 if __name__ == "__main__":
     result_clip = test_image_text_overlay()
+    if result_clip:
+        video_path = create_video_with_audio(result_clip, audio_path)
+        if video_path:
+            print(f"Successfully created video: {video_path}")
+        else:
+            print("Failed to create video")

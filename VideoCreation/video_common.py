@@ -2,7 +2,8 @@ import pandas as pd
 from typing import List, Tuple
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
-from moviepy.video.VideoClip import TextClip, ImageClip  # Added ImageClip import
+from moviepy.video.VideoClip import TextClip, ImageClip
+from moviepy.audio.io.AudioFileClip import AudioFileClip  # Add this import
 from dataclasses import dataclass
 from pathlib import Path
 from PIL import Image
@@ -142,3 +143,55 @@ def add_text_to_image(
     except Exception as e:
         print(f"Error processing image: {e}")
         return None, ""
+
+def create_video_with_audio(
+    image_clip: CompositeVideoClip, 
+    audio_path: str,
+    output_dir: str = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot\TT",
+    size: Tuple[int, int] = (1920, 1080)
+) -> str:
+    """
+    Create a video from an image clip with audio.
+    
+    Args:
+        image_clip: CompositeVideoClip containing the image with text
+        audio_path: Path to the audio file
+        output_dir: Directory for output file
+        size: Video dimensions (width, height)
+        
+    Returns:
+        str: Path to the created video file or empty string if failed
+    """
+    try:
+        # Load audio
+        audio = AudioFileClip(audio_path)
+        
+        # Set image duration to match audio
+        image_clip = image_clip.with_duration(audio.duration)
+        
+        # Add audio to clip
+        final_clip = image_clip.with_audio(audio)
+        
+        # Generate output filename
+        output_filename = f"{Path(audio_path).stem}_video.mp4"
+        output_path = os.path.join(output_dir, output_filename)
+        
+        # Write video file with fps specified
+        final_clip.write_videofile(
+            output_path,
+            fps=24,  # Added fps parameter
+            codec="libx264",
+            audio_codec="aac",
+            audio_fps=44100
+        )
+        
+        # Clean up
+        audio.close()
+        final_clip.close()
+        
+        return output_path
+
+    except Exception as e:
+        print(f"Error creating video: {e}")
+        return ""
+
