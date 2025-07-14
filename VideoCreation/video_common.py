@@ -2,7 +2,13 @@ import pandas as pd
 from typing import List, Tuple
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
-from moviepy.video.VideoClip import TextClip
+from moviepy.video.VideoClip import TextClip, ImageClip  # Added ImageClip import
+from dataclasses import dataclass
+from pathlib import Path
+from PIL import Image
+import re
+from pathlib import Path
+import os
 
 DEFAULT_FONT = "DejaVuSans"
 
@@ -51,3 +57,83 @@ def resize_and_crop_clip(clip: VideoFileClip, size: Tuple[int, int], resize_dim:
         y2 = y1 + size[1]
         clip = clip.cropped(y1=y1, y2=y2)
     return clip
+
+@dataclass
+class TextStyle:
+    font: str = "DejaVuSans"
+    font_size: int = 50
+    text_color: str = "black"
+    stroke_color: str = "white"
+    stroke_width: int = 2
+
+def add_text_to_image(
+    image_path: str, 
+    text: str, 
+    horizontal_offset: int, 
+    vertical_offset: int, 
+    style: TextStyle = TextStyle(),
+    output_dir: str = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot"
+) -> str:
+    """
+    Add text to an image with specified positioning and style.
+    
+    Args:
+        image_path: Path to the input image
+        text: Text to overlay on the image
+        horizontal_offset: Percentage from left (1-100)
+        vertical_offset: Percentage from bottom (1-100)
+        style: TextStyle configuration
+        output_dir: Directory for output file
+        
+    Returns:
+        Path to the processed image
+    """
+    try:
+        # Validate inputs
+        if not os.path.exists(image_path):
+            raise ValueError(f"Image path does not exist: {image_path}")
+        if not (1 <= horizontal_offset <= 100 and 1 <= vertical_offset <= 100):
+            raise ValueError("Offset values must be between 1 and 100")
+
+        # Create output filename
+
+        text_cleaned = re.sub(r'[\\/*?:"<>|\n]', '_', text).replace(' ', '_')
+        output_filename = f"{Path(image_path).stem}_{text_cleaned}{Path(image_path).suffix}"
+        output_path = os.path.join(output_dir, output_filename)
+
+        # Load image
+        img = Image.open(image_path)
+        
+        # Create text clip with padding
+        # Create text clip
+        txt_clip = TextClip(
+            text=text,
+            font=style.font,
+            font_size=style.font_size,
+            color=style.text_color,
+            stroke_color=style.stroke_color,
+            stroke_width=style.stroke_width,
+            method='caption',
+            size=(int(img.width * 0.8), None),  # limit width to 80% of image
+            text_align = "center",
+            margin=(10, 10, 10, 10)
+        )
+
+        # Calculate position with extra spacing
+        x_pos = int((img.width * horizontal_offset) / 100) - txt_clip.w // 2  # Center horizontally
+        y_pos = int(img.height * (100 - vertical_offset) / 100) - txt_clip.h - 20  # Add 20px bottom margin
+        
+        # Create composite
+        result = CompositeVideoClip([
+            ImageClip(image_path),
+            txt_clip.with_position((x_pos, y_pos))
+        ])
+        
+        # Save result
+        result.save_frame(output_path)
+        
+        return output_path
+
+    except Exception as e:
+        print(f"Error processing image: {e}")
+        return ""
