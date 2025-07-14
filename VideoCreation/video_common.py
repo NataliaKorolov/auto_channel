@@ -72,8 +72,9 @@ def add_text_to_image(
     horizontal_offset: int, 
     vertical_offset: int, 
     style: TextStyle = TextStyle(),
-    output_dir: str = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot"
-) -> str:
+    output_dir: str = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot",
+    write_image_as_file: bool = False
+) -> Tuple[CompositeVideoClip, str]:
     """
     Add text to an image with specified positioning and style.
     
@@ -84,9 +85,12 @@ def add_text_to_image(
         vertical_offset: Percentage from bottom (1-100)
         style: TextStyle configuration
         output_dir: Directory for output file
+        write_image_as_file: Whether to save the image to disk
         
     Returns:
-        Path to the processed image
+        Tuple containing:
+        - CompositeVideoClip: The processed image as a clip
+        - str: Path to the saved image (empty string if not saved)
     """
     try:
         # Validate inputs
@@ -96,15 +100,15 @@ def add_text_to_image(
             raise ValueError("Offset values must be between 1 and 100")
 
         # Create output filename
-
-        text_cleaned = re.sub(r'[\\/*?:"<>|\n]', '_', text).replace(' ', '_')
-        output_filename = f"{Path(image_path).stem}_{text_cleaned}{Path(image_path).suffix}"
-        output_path = os.path.join(output_dir, output_filename)
+        output_path = ""
+        if write_image_as_file:
+            text_cleaned = re.sub(r'[\\/*?:"<>|\n]', '_', text).replace(' ', '_')
+            output_filename = f"{Path(image_path).stem}_{text_cleaned}{Path(image_path).suffix}"
+            output_path = os.path.join(output_dir, output_filename)
 
         # Load image
         img = Image.open(image_path)
         
-        # Create text clip with padding
         # Create text clip
         txt_clip = TextClip(
             text=text,
@@ -120,8 +124,8 @@ def add_text_to_image(
         )
 
         # Calculate position with extra spacing
-        x_pos = int((img.width * horizontal_offset) / 100) - txt_clip.w // 2  # Center horizontally
-        y_pos = int(img.height * (100 - vertical_offset) / 100) - txt_clip.h - 20  # Add 20px bottom margin
+        x_pos = int((img.width * horizontal_offset) / 100) - txt_clip.w // 2
+        y_pos = int(img.height * (100 - vertical_offset) / 100) - txt_clip.h - 20
         
         # Create composite
         result = CompositeVideoClip([
@@ -129,11 +133,12 @@ def add_text_to_image(
             txt_clip.with_position((x_pos, y_pos))
         ])
         
-        # Save result
-        result.save_frame(output_path)
+        # Save result if requested
+        if write_image_as_file:
+            result.save_frame(output_path)
         
-        return output_path
+        return result, output_path
 
     except Exception as e:
         print(f"Error processing image: {e}")
-        return ""
+        return None, ""
