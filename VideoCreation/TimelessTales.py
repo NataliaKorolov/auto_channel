@@ -31,6 +31,11 @@ def process_video_entries(csv_path: str) -> List[str]:
 
         for entry in entries:
             try:
+                # Skip entries that don't have a status containing "ToDo" (case-insensitive, ignoring spaces)
+                if not entry.status or not "todo" in entry.status.lower().replace(" ", ""):
+                    logger.info(f"Skipping entry with status '{entry.status}': {entry.image_path}")
+                    continue
+                
                 # Create image with text overlays
                 image_clip, _ = add_texts_to_image(
                     image_path=entry.image_path,
