@@ -7,19 +7,19 @@ from moviepy.audio.io.AudioFileClip import AudioFileClip
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
 from moviepy.video.VideoClip import TextClip
 from moviepy import TextClip, CompositeVideoClip
-from video_common import get_texts_from_csv, add_text_overlay, resize_and_crop_clip
+from video_common import get_texts_from_csv, add_text_overlay, resize_and_crop_clip, BASE_DIRECTORY
 
 
 # No need to import "moviepy.video.fx.all" directly.
 # All required effects (like fadein) are imported individually above.
 # === CONFIGURATION ===
-# BASE = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot\300"
-BASE = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot\TragicBraveryHector"
-VIDEO_PATHS = [os.path.join(BASE, f"prompt {i}.mp4") for i in range(1, 11)]
-AUDIO_PATH_RU = os.path.join(BASE, "Voice_Over_RU.mp3")
-AUDIO_PATH_EN = os.path.join(BASE, "Voice_Over_EN.mp3")
-CSV_PATH = os.path.join(BASE, "Video_Texts.csv")
-FONT_PATH = os.path.join(BASE, "Cinzel-Regular.ttf")  # Update if needed
+BASE_DIRECTORY_GREECE = os.path.join(BASE_DIRECTORY, "TragicBraveryHector")
+# BASE_DIRECTORY_300 = os.path.join(BASE_DIRECTORY, "300")
+VIDEO_PATHS = [os.path.join(BASE_DIRECTORY_GREECE, f"prompt {i}.mp4") for i in range(1, 11)]
+AUDIO_PATH_RU = os.path.join(BASE_DIRECTORY_GREECE, "Voice_Over_RU.mp3")
+AUDIO_PATH_EN = os.path.join(BASE_DIRECTORY_GREECE, "Voice_Over_EN.mp3")
+CSV_PATH = os.path.join(BASE_DIRECTORY_GREECE, "Video_Texts.csv")
+FONT_PATH = os.path.join(BASE_DIRECTORY_GREECE, "Cinzel-Regular.ttf")  # Update if needed
 
 MIN_DURATION = 40  # seconds
 DEFAULT_FONT = "DejaVuSans"  # Safe fallback font
@@ -78,7 +78,7 @@ def make_and_export(output_file: str, size: Tuple[int, int], resize_dim: str, au
 if __name__ == "__main__":
     # Russian versions
     make_and_export(
-        os.path.join(BASE, "final_vertical_1080x1920_RU.mp4"),
+        os.path.join(BASE_DIRECTORY_GREECE, "final_vertical_1080x1920_RU.mp4"),
         (1080, 1920),
         "height",
         AUDIO_PATH_RU,
@@ -86,7 +86,7 @@ if __name__ == "__main__":
         "russian_text"
     )
     make_and_export(
-        os.path.join(BASE, "final_horizontal_1920x1080_RU.mp4"),
+        os.path.join(BASE_DIRECTORY_GREECE, "final_horizontal_1920x1080_RU.mp4"),
         (1920, 1080),
         "width",
         AUDIO_PATH_RU,
@@ -95,15 +95,15 @@ if __name__ == "__main__":
     )
     # English versions
     make_and_export(
-        os.path.join(BASE, "final_vertical_1080x1920_EN.mp4"),
+        os.path.join(BASE_DIRECTORY_GREECE, "final_vertical_1080x1920_EN.mp4"),
         (1080, 1920),
         "height",
-        AUDIO_PATH_EN,
+        AUDIO_PATH_EN, 
         CSV_PATH,
         "english_text"
     )
     make_and_export(
-        os.path.join(BASE, "final_horizontal_1920x1080_EN.mp4"),
+        os.path.join(BASE_DIRECTORY_GREECE, "final_horizontal_1920x1080_EN.mp4"),
         (1920, 1080),
         "width",
         AUDIO_PATH_EN,

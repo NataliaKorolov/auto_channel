@@ -4,12 +4,16 @@ from moviepy.video.io.VideoFileClip import VideoFileClip
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
 from moviepy.video.VideoClip import TextClip, ImageClip
 from moviepy.audio.io.AudioFileClip import AudioFileClip  # Add this import
+from moviepy import concatenate_videoclips
 from dataclasses import dataclass, field
 from pathlib import Path
 from PIL import Image
 import re
 from pathlib import Path
 import os
+
+# Base directory constants
+BASE_DIRECTORY = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot"
 
 DEFAULT_FONT = "DejaVuSans"
 
@@ -73,7 +77,7 @@ def add_text_to_image(
     horizontal_offset: int, 
     vertical_offset: int, 
     style: TextStyle = TextStyle(),
-    output_dir: str = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot",
+    output_dir: str = BASE_DIRECTORY,
     write_image_as_file: bool = False
 ) -> Tuple[CompositeVideoClip, str]:
     """
@@ -156,7 +160,7 @@ class TextOverlay:
 def add_texts_to_image(
     image_path: str,
     text_overlays: List[TextOverlay],
-    output_dir: str = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot",
+    output_dir: str = BASE_DIRECTORY,
     write_image_as_file: bool = False
 ) -> Tuple[CompositeVideoClip, str]:
     """
@@ -230,68 +234,206 @@ def add_texts_to_image(
         print(f"Error processing image: {e}")
         return None, ""
 
+def add_head_video(main_clip, head_video_path: str):
+    """
+    Prepends a head video to the beginning of the main clip.
+    
+    Args:
+        main_clip: The main video clip
+        head_video_path: Path to the video to prepend
+        
+    Returns:
+        A new clip with the head video prepended
+    """
+    if not head_video_path or not os.path.exists(head_video_path):
+        if head_video_path:
+            print(f"Warning: Head video not found: {head_video_path}")
+        return main_clip
+    
+    head_clip = None    
+    try:
+        # Load the head video
+        head_clip = VideoFileClip(head_video_path)
+        
+        # Ensure head video has the same dimensions as the main clip
+        if head_clip.size != main_clip.size:
+            print(f"Resizing head video from {head_clip.size} to {main_clip.size}")
+            head_clip = head_clip.resized(width=main_clip.w, height=main_clip.h)
+        
+        # Prepend the head clip to the main clip
+        result_clip = concatenate_videoclips([head_clip, main_clip], method="compose")
+        print(f"Successfully prepended head video: {head_video_path}")
+        
+        return result_clip
+        
+    except Exception as e:
+        print(f"Error prepending head video: {e}")
+        return main_clip
+    finally:
+        # Ensure proper cleanup even if an exception occurs
+        if head_clip is not None:
+            try:
+                head_clip.close()
+            except Exception as e:
+                print(f"Warning: Error closing head clip: {e}")
+
+
+def add_tail_video(main_clip, tail_video_path: str):
+    """
+    Appends a tail video to the end of the main clip.
+    
+    Args:
+        main_clip: The main video clip
+        tail_video_path: Path to the video to append
+        
+    Returns:
+        A new clip with the tail video appended
+    """
+    if not tail_video_path or not os.path.exists(tail_video_path):
+        if tail_video_path:
+            print(f"Warning: Tail video not found: {tail_video_path}")
+        return main_clip
+    
+    tail_clip = None    
+    try:
+        # Load the tail video
+        tail_clip = VideoFileClip(tail_video_path)
+        
+        # Ensure tail video has the same dimensions as the main clip
+        if tail_clip.size != main_clip.size:
+            print(f"Resizing tail video from {tail_clip.size} to {main_clip.size}")
+            tail_clip = tail_clip.resized(width=main_clip.w, height=main_clip.h)
+        
+        # Append the tail clip to the main clip
+        result_clip = concatenate_videoclips([main_clip, tail_clip], method="compose")
+        print(f"Successfully appended tail video: {tail_video_path}")
+        
+        return result_clip
+        
+    except Exception as e:
+        print(f"Error appending tail video: {e}")
+        return main_clip
+    finally:
+        # Ensure proper cleanup even if an exception occurs
+        if tail_clip is not None:
+            try:
+                tail_clip.close()
+            except Exception as e:
+                print(f"Warning: Error closing tail clip: {e}")
+
 def create_video_with_audio(
     image_clip: CompositeVideoClip, 
     audio_path: str,
-    output_dir: str = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot\TT",
+    output_dir: str = BASE_DIRECTORY,
+    output_path: str = None,
+    head_video_path: str = None,
+    tail_video_path: str = None,
     size: Tuple[int, int] = (1920, 1080)
 ) -> str:
     """
     Create a video from an image clip with audio.
     
     Args:
-        image_clip: CompositeVideoClip containing the image with text
+        image_clip: The image as a CompositeVideoClip
         audio_path: Path to the audio file
-        output_dir: Directory for output file
-        size: Video dimensions (width, height)
+        output_dir: Directory to save the video (used if output_path is not provided)
+        output_path: Full path for output file (takes precedence over output_dir)
+        head_video_path: Optional path to video to prepend to the beginning
+        tail_video_path: Optional path to video to append to the end
+        size: Output video dimensions (width, height)
         
     Returns:
-        str: Path to the created video file or empty string if failed
+        Path to the created video file, or empty string on error
     """
+    audio = None
+    main_clip = None
+    final_clip = None
+        
     try:
         # Load audio
         audio = AudioFileClip(audio_path)
         
+        # Verify we have a valid image clip
+        if image_clip is None:
+            raise ValueError("Invalid image clip provided")
+            
         # Set image duration to match audio
         image_clip = image_clip.with_duration(audio.duration)
         
         # Add audio to clip
-        final_clip = image_clip.with_audio(audio)
+        main_clip = image_clip.with_audio(audio)
         
-        # Generate output filename
-        output_filename = f"{Path(audio_path).stem}_video.mp4"
-        output_path = os.path.join(output_dir, output_filename)
+        # Add head video if provided
+        if head_video_path:
+            main_clip = add_head_video(main_clip, head_video_path)
+            
+        # Add tail video if provided
+        if tail_video_path:
+            final_clip = add_tail_video(main_clip, tail_video_path)
+        else:
+            final_clip = main_clip
+            
+        # Generate output path
+        if output_path:
+            # If a complete output path is provided, use it
+            # Ensure the directory exists
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        else:
+            # Generate output filename from audio name
+            output_filename = f"{Path(audio_path).stem}.mp4"
+            output_path = os.path.join(output_dir, output_filename)
         
-        # Write video file with fps specified
+        # Write video file with fps specified - REMOVED verbose and logger parameters
         final_clip.write_videofile(
             output_path,
-            fps=24,  # Added fps parameter
+            fps=24,
             codec="libx264",
             audio_codec="aac",
             audio_fps=44100
         )
-        
-        # Clean up
-        audio.close()
-        final_clip.close()
         
         return output_path
 
     except Exception as e:
         print(f"Error creating video: {e}")
         return ""
-
+    finally:
+        # Clean up resources in reverse order of creation
+        try:
+            # Close clips only if they exist and are not references to other clips
+            if final_clip is not None and final_clip is not main_clip:
+                try:
+                    final_clip.close()
+                except Exception as e:
+                    pass
+            
+            if main_clip is not None and main_clip is not image_clip:
+                try:
+                    main_clip.close()
+                except Exception as e:
+                    pass
+                
+            if audio is not None:
+                try:
+                    audio.close()
+                except Exception as e:
+                    pass
+                
+        except Exception as e:
+            print(f"Warning: Error during cleanup: {e}")
 
 
 
 @dataclass
 class VideoOverlayEntry:
-    image_path: str
-    audio_path: str
-    output_video_path: str
-    overlays: List[TextOverlay]
-    status: Optional[str] = ""
-    notes: Optional[str] = ""
+    image_path: str  # Path to the input image (absolute or relative to BASE_DIRECTORY_TT)
+    audio_path: str  # Path to the audio file (absolute or relative to BASE_DIRECTORY_TT)
+    output_video_path: str  # Path for the output video (absolute or relative to BASE_DIRECTORY_TT)
+    overlays: List[TextOverlay]  # List of text overlays to apply
+    head_video_path: Optional[str] = ""  # Path to video to prepend (absolute or relative to BASE_DIRECTORY_TT)
+    tail_video_path: Optional[str] = ""  # Path to video to append (absolute or relative to BASE_DIRECTORY_TT)
+    status: Optional[str] = ""  # Status of the entry (e.g., "ToDo")
+    notes: Optional[str] = ""  # Additional notes
 
 def parse_video_overlay_entry(row: pd.Series) -> VideoOverlayEntry:
     """
@@ -352,6 +494,8 @@ def parse_video_overlay_entry(row: pd.Series) -> VideoOverlayEntry:
         audio_path=safe_str_convert(row["Audio Path"], ""),
         output_video_path=safe_str_convert(row["Output Video Path"], ""),
         overlays=overlays,
+        head_video_path=safe_str_convert(row.get("Head Video", ""), ""),
+        tail_video_path=safe_str_convert(row.get("Tail Video", ""), ""),
         status=safe_str_convert(row.get("Status"), ""),
         notes=safe_str_convert(row.get("Notes"), "")
     )
@@ -405,7 +549,7 @@ def load_video_overlay_entries_from_excel(excel_path: str) -> List[VideoOverlayE
         
     Returns:
         List of VideoOverlayEntry objects
-    """
+    """ 
     try:
         # Try reading with openpyxl engine which handles encoding better
         df = pd.read_excel(excel_path, engine='openpyxl')

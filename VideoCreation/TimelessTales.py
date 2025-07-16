@@ -1,10 +1,16 @@
+import os
+
 from video_common import (
     load_video_overlay_entries_from_excel, 
     add_texts_to_image, 
     create_video_with_audio,
-    VideoOverlayEntry
+    VideoOverlayEntry,
+    BASE_DIRECTORY
 )
 from video_common import add_text_to_image, TextStyle, TextOverlay
+
+# Define TimelessTales base directory
+BASE_DIRECTORY_TT = os.path.join(BASE_DIRECTORY, "TT")
 
 import os
 from typing import List
@@ -13,6 +19,58 @@ import logging
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def resolve_path(path: str) -> str:
+    """
+    Resolves a path relative to BASE_DIRECTORY_TT to an absolute path.
+    If the path is already absolute, returns it unchanged.
+    
+    Args:
+        path: A relative or absolute file path
+        
+    Returns:
+        str: An absolute file path
+    """
+    if not path:
+        return ""
+        
+    # If path is already absolute, return it
+    if os.path.isabs(path):
+        return path
+        
+    # Otherwise join with BASE_DIRECTORY_TT
+    return os.path.join(BASE_DIRECTORY_TT, path)
+
+def load_tt_entries_from_excel(excel_path: str) -> List[VideoOverlayEntry]:
+    """
+    Load video overlay entries from an Excel file and convert relative paths
+    to absolute paths using BASE_DIRECTORY_TT as the base.
+    
+    Args:
+        excel_path: Path to the Excel file
+        
+    Returns:
+        List of VideoOverlayEntry objects with resolved paths
+    """
+    entries = load_video_overlay_entries_from_excel(excel_path)
+    resolved_entries = []
+    
+    for entry in entries:
+        # Resolve paths to absolute paths if they're relative
+        resolved_entry = VideoOverlayEntry(
+            image_path=resolve_path(entry.image_path),
+            audio_path=resolve_path(entry.audio_path),
+            output_video_path=resolve_path(entry.output_video_path),
+            overlays=entry.overlays,
+            head_video_path=resolve_path(entry.head_video_path) if entry.head_video_path else "",
+            tail_video_path=resolve_path(entry.tail_video_path) if entry.tail_video_path else "",
+            status=entry.status,
+            notes=entry.notes
+        )
+        resolved_entries.append(resolved_entry)
+        logger.info(f"Resolved paths for entry: {resolved_entry.image_path}")
+    
+    return resolved_entries
 
 def process_video_entries(csv_path: str) -> List[str]:
     """
@@ -25,8 +83,8 @@ def process_video_entries(csv_path: str) -> List[str]:
         List of created video file paths
     """
     try:
-        # Load entries from Excel
-        entries = load_video_overlay_entries_from_excel(csv_path)
+        # Load entries from Excel with path resolution
+        entries = load_tt_entries_from_excel(csv_path)
         created_videos = []
 
         for entry in entries:
@@ -45,11 +103,24 @@ def process_video_entries(csv_path: str) -> List[str]:
 
                 if image_clip:
                     # Create video with audio
-                    video_path = create_video_with_audio(
-                        image_clip=image_clip,
-                        audio_path=entry.audio_path,
-                        output_dir=os.path.dirname(entry.output_video_path)
-                    )
+                    if entry.output_video_path:
+                        # If output_video_path is specified, use the full path
+                        video_path = create_video_with_audio(
+                            image_clip=image_clip,
+                            audio_path=entry.audio_path,
+                            output_path=entry.output_video_path,
+                            head_video_path=entry.head_video_path if entry.head_video_path else None,
+                            tail_video_path=entry.tail_video_path if entry.tail_video_path else None
+                        )
+                    else:
+                        # Otherwise use the default directory with auto-generated name
+                        video_path = create_video_with_audio(
+                            image_clip=image_clip,
+                            audio_path=entry.audio_path,
+                            output_dir=BASE_DIRECTORY_TT,
+                            head_video_path=entry.head_video_path if entry.head_video_path else None,
+                            tail_video_path=entry.tail_video_path if entry.tail_video_path else None
+                        )
                     
                     if video_path:
                         created_videos.append(video_path)
@@ -70,7 +141,7 @@ def process_video_entries(csv_path: str) -> List[str]:
         return []
 
 if __name__ == "__main__":
-    csv_path = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot\TT\TimelessTales_Video_Tracker.xlsx"
+    csv_path = os.path.join(BASE_DIRECTORY_TT, "TimelessTales_Video_Tracker.xlsx")
     created_videos = process_video_entries(csv_path)
     
     if created_videos:
@@ -92,12 +163,12 @@ if __name__ == "__main__":
 
 
 
-audio_path = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot\TT\Voice_Over_RU.mp3" 
+audio_path = resolve_path("Voice_Over_RU.mp3")
 
 
 def test_image_text_overlay():
     # Test parameters
-    image_path = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot\TT\Дама в розовом.png"
+    image_path = resolve_path("Дама в розовом.png")
     
     textForTitle = "Дама в\nрозовом"
     horizontal_offsetForTitle = 30
@@ -155,7 +226,14 @@ def test_image_text_overlay():
 # if __name__ == "__main__":
 #     result_clip = test_image_text_overlay()
 #     if result_clip:
-#         video_path = create_video_with_audio(result_clip, audio_path)
+#         # Example with auto-generated filename
+#         video_path = create_video_with_audio(
+#             image_clip=result_clip, 
+#             audio_path=audio_path, 
+#             output_dir=BASE_DIRECTORY_TT,
+#             head_video_path=None,  # No head video for this test
+#             tail_video_path=None   # No tail video for this test
+#         )
 #         if video_path:
 #             print(f"Successfully created video: {video_path}")
 #         else:
@@ -165,8 +243,8 @@ def test_image_text_overlay():
 
 
 def test_image_texts_overlay():
-    # # Test parameters
-    image_path = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot\TT\Дама в розовом.png"
+    # Test parameters
+    image_path = resolve_path("Дама в розовом.png")
     
     # Create text overlays list
     text_overlays = [
@@ -194,26 +272,35 @@ def test_image_texts_overlay():
         )
     ]
 
-
-
-    # Process all text overlays at once
-    final_clip, final_path = add_texts_to_image(
-        image_path=image_path,
-        text_overlays=text_overlays,
-        write_image_as_file=False  # Set to True if you want to save the final image
-    )
-    
-    if final_clip:
-        print(f"Successfully created image: {final_path}")
-        return final_clip
-    else:
-        print("Failed to add texts to image")
+    try:
+        # Process all text overlays at once
+        final_clip, final_path = add_texts_to_image(
+            image_path=image_path,
+            text_overlays=text_overlays,
+            write_image_as_file=False  # Set to True if you want to save the final image
+        )
+        
+        if final_clip:
+            print(f"Successfully created image: {final_path}")
+            return final_clip
+        else:
+            print("Failed to add texts to image")
+            return None
+    except Exception as e:
+        print(f"Error creating image with text overlays: {e}")
         return None
 
 # if __name__ == "__main__":
 #     result_clip = test_image_texts_overlay()
 #     if result_clip:
-#         video_path = create_video_with_audio(result_clip, audio_path)
+#         # Example with auto-generated filename
+#         video_path = create_video_with_audio(
+#             image_clip=result_clip, 
+#             audio_path=audio_path, 
+#             output_dir=BASE_DIRECTORY_TT,
+#             head_video_path=None,  # No head video for this test
+#             tail_video_path=None   # No tail video for this test
+#         )
 #         if video_path:
 #             print(f"Successfully created video: {video_path}")
 #         else:
