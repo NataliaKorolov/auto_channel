@@ -4,22 +4,27 @@ from typing import List, Tuple
 from moviepy import concatenate_videoclips
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from moviepy.audio.io.AudioFileClip import AudioFileClip
-from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
-from moviepy.video.VideoClip import TextClip
-from moviepy import TextClip, CompositeVideoClip
+# from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
+# from moviepy.video.VideoClip import TextClip
+# from moviepy import TextClip, CompositeVideoClip
 from video_common import get_texts_from_csv, add_text_overlay, resize_and_crop_clip, BASE_DIRECTORY
 
 
 # No need to import "moviepy.video.fx.all" directly.
 # All required effects (like fadein) are imported individually above.
 # === CONFIGURATION ===
-BASE_DIRECTORY_GREECE = os.path.join(BASE_DIRECTORY, "TragicBraveryHector")
-# BASE_DIRECTORY_300 = os.path.join(BASE_DIRECTORY, "300")
-VIDEO_PATHS = [os.path.join(BASE_DIRECTORY_GREECE, f"prompt {i}.mp4") for i in range(1, 11)]
-AUDIO_PATH_RU = os.path.join(BASE_DIRECTORY_GREECE, "Voice_Over_RU.mp3")
-AUDIO_PATH_EN = os.path.join(BASE_DIRECTORY_GREECE, "Voice_Over_EN.mp3")
-CSV_PATH = os.path.join(BASE_DIRECTORY_GREECE, "Video_Texts.csv")
-FONT_PATH = os.path.join(BASE_DIRECTORY_GREECE, "Cinzel-Regular.ttf")  # Update if needed
+BASE_DIRECTORY_GREECE = os.path.join(BASE_DIRECTORY, "Greece_Automation")
+
+BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS = os.path.join(BASE_DIRECTORY_GREECE, "Common_Artifacts")
+BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS_TAIL = os.path.join(BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS, "Subscribe")
+
+
+BASE_DIRECTORY_GREECE_CURRENT = os.path.join(BASE_DIRECTORY_GREECE, "TragicBraveryHector")
+VIDEO_PATHS = [os.path.join(BASE_DIRECTORY_GREECE_CURRENT, f"prompt {i}.mp4") for i in range(1, 11)]
+AUDIO_PATH_RU = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "Voice_Over_RU.mp3")
+AUDIO_PATH_EN = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "Voice_Over_EN.mp3")
+CSV_PATH = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "Video_Texts.csv")
+# FONT_PATH = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "Cinzel-Regular.ttf")  # Update if needed
 
 MIN_DURATION = 40  # seconds
 DEFAULT_FONT = "DejaVuSans"  # Safe fallback font
