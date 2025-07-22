@@ -12,6 +12,7 @@ from PIL import Image
 from pathlib import Path
 from moviepy.audio.fx.MultiplyVolume import MultiplyVolume
 from moviepy.audio.AudioClip import CompositeAudioClip
+import re  # Add this import at the top with other imports
 
 # Base directory constants
 BASE_DIRECTORY = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot"
@@ -773,6 +774,115 @@ def CreateVideoFile(
             if 'text_audio' in locals() and text_audio and hasattr(text_audio, 'close'):
                 text_audio.close()
             if 'composite_audio' in locals() and composite_audio and hasattr(composite_audio, 'close'):
+                composite_audio.close()
+        except Exception as e:
+            print(f"Warning: Error during cleanup: {e}")
+
+def CreateAudioFile(
+    output_file: str,
+    music_overlay_path: str, 
+    text_audio_overlay_path: str
+) -> None:
+    """
+    Create and export an audio file by combining music and text audio tracks.
+    The final duration is determined by the longer of the two input audio files.
+    
+    Args:
+        output_file: Full path for the output audio file
+        music_overlay_path: Full path to background music file
+        text_audio_overlay_path: Full path to text audio file
+    """
+    music_audio = None
+    text_audio = None
+    composite_audio = None
+    
+    try:
+        # Load audio files and check durations
+        if os.path.exists(music_overlay_path):
+            music_audio = AudioFileClip(music_overlay_path)
+            print(f"Music audio duration: {music_audio.duration:.2f}s")
+        else:
+            print(f"Warning: Music file not found: {music_overlay_path}")
+            
+        if os.path.exists(text_audio_overlay_path):
+            text_audio = AudioFileClip(text_audio_overlay_path)
+            print(f"Text audio duration: {text_audio.duration:.2f}s")
+        else:
+            print(f"Warning: Text audio file not found: {text_audio_overlay_path}")
+            
+        # Check if we have at least one audio file
+        if not music_audio and not text_audio:
+            print("Error: No valid audio files found")
+            return
+            
+        # Determine final duration (max of both audio files)
+        final_duration = 0
+        if music_audio and text_audio:
+            final_duration = max(music_audio.duration, text_audio.duration)
+            print(f"Final audio duration: {final_duration:.2f}s (max of both tracks)")
+        elif music_audio:
+            final_duration = music_audio.duration
+            print(f"Final audio duration: {final_duration:.2f}s (music only)")
+        elif text_audio:
+            final_duration = text_audio.duration
+            print(f"Final audio duration: {final_duration:.2f}s (text only)")
+
+        # Prepare audio tracks for mixing
+        audio_tracks = []
+        
+        # Handle text audio
+        if text_audio:
+            # Always use the original text audio duration, don't extend it
+            text_to_use = text_audio
+            audio_tracks.append(text_to_use)
+            print("Added text audio track")
+        
+        # Handle music audio
+        if music_audio:
+            if music_audio.duration < final_duration:
+                # Loop music to cover the full duration
+                loops_needed = int(final_duration / music_audio.duration) + 1
+                music_looped = concatenate_videoclips([music_audio] * loops_needed)
+                music_extended = music_looped.subclipped(0, final_duration)
+            else:
+                # Trim to final duration
+                music_extended = music_audio.subclipped(0, final_duration)
+            
+            # Reduce music volume to 30% using volumex effect
+            music_low = music_extended.with_effects([MultiplyVolume(0.3)])
+            audio_tracks.append(music_low)
+            print("Added background music track (30% volume)")
+
+        # Create composite audio - let MoviePy handle the duration automatically
+        if len(audio_tracks) > 1:
+            composite_audio = CompositeAudioClip(audio_tracks)
+            print("Created composite audio with multiple tracks")
+        else:
+            composite_audio = audio_tracks[0]
+            print("Using single audio track")
+
+        # Ensure output directory exists
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+
+        # Export audio file with simplified parameters
+        print(f"Exporting audio to: {output_file}")
+        composite_audio.write_audiofile(output_file)
+        
+        print(f"Successfully created audio file: {output_file}")
+
+    except Exception as e:
+        print(f"Error creating audio file: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    finally:
+        # Clean up resources
+        try:
+            if music_audio and hasattr(music_audio, 'close'):
+                music_audio.close()
+            if text_audio and hasattr(text_audio, 'close'):
+                text_audio.close()
+            if composite_audio and hasattr(composite_audio, 'close'):
                 composite_audio.close()
         except Exception as e:
             print(f"Warning: Error during cleanup: {e}")
