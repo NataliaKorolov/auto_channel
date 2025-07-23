@@ -19,6 +19,9 @@ BASE_DIRECTORY = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBo
 
 DEFAULT_FONT = "DejaVuSans"
 
+MIN_DURATION = 1  # seconds
+
+
 def get_texts_from_csv(csv_path: str, column: str) -> List[str]:
     """Read texts from a specified column in a CSV or Excel file."""
     try:
@@ -579,204 +582,6 @@ def load_video_overlay_entries_from_excel(excel_path: str) -> List[VideoOverlayE
         print(f"Error reading Excel file: {str(e)}")
         return []
 
-def CreateVideoFile(
-    output_file: str,
-    video_paths: List[str],
-    music_overlay_path: str,
-    text_audio_overlay_path: str,
-    overlays_xlsx_path: str,
-    size: Tuple[int, int] = (1920, 1080),
-    resize_dim: str = "width",
-    text_column: str = "english_text"
-) -> None:
-    """
-    Create and export a video with concatenated videos, dual audio tracks, and text overlays.
-    
-    Args:
-        output_file: Path for the output video file
-        video_paths: List of paths to video files to concatenate
-        music_overlay_path: Path to background music file
-        text_audio_overlay_path: Path to primary text audio file
-        overlays_xlsx_path: Path to Excel file containing text overlays
-        size: Output video dimensions (width, height)
-        resize_dim: Dimension to use for resizing ("width" or "height")
-        text_column: Column name in Excel file for text overlays
-    """
-    # Convert relative paths to absolute paths
-    output_file = os.path.join(BASE_DIRECTORY, output_file) if not os.path.isabs(output_file) else output_file
-    music_overlay_path = os.path.join(BASE_DIRECTORY, music_overlay_path) if not os.path.isabs(music_overlay_path) else music_overlay_path
-    text_audio_overlay_path = os.path.join(BASE_DIRECTORY, text_audio_overlay_path) if not os.path.isabs(text_audio_overlay_path) else text_audio_overlay_path
-    overlays_xlsx_path = os.path.join(BASE_DIRECTORY, overlays_xlsx_path) if not os.path.isabs(overlays_xlsx_path) else overlays_xlsx_path
-    
-    # Convert video paths to absolute
-    absolute_video_paths = []
-    for path in video_paths:
-        abs_path = os.path.join(BASE_DIRECTORY, path) if not os.path.isabs(path) else path
-        absolute_video_paths.append(abs_path)
-    
-    try:
-        # Get text overlays from Excel file
-        texts = get_texts_from_csv(overlays_xlsx_path, text_column)
-        if not texts:
-            print(f"Warning: No texts found in {overlays_xlsx_path}, column '{text_column}'")
-        
-        # Process video clips
-        clips = []
-        for idx, path in enumerate(absolute_video_paths):
-            if not os.path.exists(path):
-                print(f"Warning: {path} not found. Skipping.")
-                continue
-            try:
-                clip = VideoFileClip(path)
-                clip = resize_and_crop_clip(clip, size, resize_dim)
-                
-                # Add text overlay if available
-                if idx < len(texts) and texts[idx].strip():
-                    clip = add_text_overlay(clip, texts[idx], size)
-                else:
-                    print(f"Warning: No text for clip {idx+1}")
-                    
-                clips.append(clip)
-            except Exception as e:
-                print(f"Error processing {path}: {e}")
-                continue
-
-        if not clips:
-            print("No video clips found. Exiting.")
-            return
-
-        # Concatenate video clips
-        print(f"Concatenating {len(clips)} video clips...")
-        final_video_clip = concatenate_videoclips(clips, method="compose")
-        video_duration = final_video_clip.duration
-        print(f"Video duration: {video_duration:.2f}s")
-
-        # Load audio files
-        music_audio = None
-        text_audio = None
-        
-        try:
-            if os.path.exists(music_overlay_path):
-                music_audio = AudioFileClip(music_overlay_path)
-                print(f"Music audio duration: {music_audio.duration:.2f}s")
-            else:
-                print(f"Warning: Music file not found: {music_overlay_path}")
-                
-            if os.path.exists(text_audio_overlay_path):
-                text_audio = AudioFileClip(text_audio_overlay_path)
-                print(f"Text audio duration: {text_audio.duration:.2f}s")
-            else:
-                print(f"Warning: Text audio file not found: {text_audio_overlay_path}")
-        except Exception as e:
-            print(f"Error loading audio files: {e}")
-
-        # Determine final duration based on audio files
-        final_duration = video_duration
-        if music_audio and text_audio:
-            final_duration = max(music_audio.duration, text_audio.duration)
-        elif music_audio:
-            final_duration = music_audio.duration
-        elif text_audio:
-            final_duration = text_audio.duration
-            
-        print(f"Final video duration: {final_duration:.2f}s")
-
-        # Extend video if needed (loop last frame)
-        if video_duration < final_duration:
-            print(f"Video shorter than audio. Extending by {final_duration - video_duration:.2f}s")
-            extension_duration = final_duration - video_duration
-            
-            # Get the last frame and extend it
-            last_frame = final_video_clip.to_ImageClip(t=final_video_clip.duration - 0.1)
-            last_frame = last_frame.with_duration(extension_duration)
-            
-            # Concatenate original video with extended last frame
-            final_video_clip = concatenate_videoclips([final_video_clip, last_frame], method="compose")
-
-        # Create composite audio - SIMPLE AND RELIABLE APPROACH
-        composite_audio = None
-        if music_audio and text_audio:
-            # Trim audio clips to final duration first
-            text_trimmed = text_audio.subclipped(0, min(text_audio.duration, final_duration))
-            music_trimmed = music_audio.subclipped(0, min(music_audio.duration, final_duration))
-            
-            # # Create a simple volume-reduced audio using numpy array manipulation
-            # import numpy as np
-            
-            # def volume_reduce_audio(clip, factor=0.3):
-            #     """Manually reduce audio volume by manipulating the audio array"""
-            #     def make_frame(t):
-            #         # Get the original audio frame
-            #         frame = clip.get_frame(t)
-            #         # Multiply by volume factor (0.3 = 30% volume)
-            #         return frame * factor
-                
-            #     # Create new audio clip with reduced volume
-            #     return clip.set_make_frame(make_frame)
-            
-            # # Apply volume reduction to music
-            # music_low = volume_reduce_audio(music_trimmed, 0.3)
-            
-            music_low = music_trimmed   #MultiplyVolume(music_trimmed, 0.3)  # Reduce music volume to 30%
-
-            composite_audio = CompositeAudioClip([text_trimmed, music_low])
-            print("Created composite audio with text (primary) and music (30% background)")
-            
-        elif text_audio:
-            composite_audio = text_audio.subclipped(0, min(text_audio.duration, final_duration))
-            print("Using text audio only")
-            
-        elif music_audio:
-            composite_audio = music_audio.subclipped(0, min(music_audio.duration, final_duration))
-            print("Using music audio only")
-
-        # Set final duration and add audio
-        final_video_clip = final_video_clip.with_duration(final_duration)
-        if composite_audio:
-            final_video_clip = final_video_clip.with_audio(composite_audio)
-
-        # Ensure output directory exists
-        os.makedirs(os.path.dirname(output_file), exist_ok=True)
-
-        # Export video
-        print(f"Exporting video to: {output_file}")
-        final_video_clip.write_videofile(
-            output_file,
-            codec="libx264",
-            audio_codec="aac",
-            preset="ultrafast",
-            bitrate="2000k",  # Reduced bitrate
-            audio_fps=44100,
-            logger=None,
-            threads=4,
-            remove_temp=True,
-            ffmpeg_params=["-movflags", "faststart"]  # Add faststart flag
-        )
-        
-        print(f"Successfully created video: {output_file}")
-
-    except Exception as e:
-        print(f"Error creating video file: {e}")
-        import traceback
-        traceback.print_exc()  # This will show the full error traceback
-    
-    finally:
-        # Clean up resources
-        try:
-            if 'clips' in locals():
-                for clip in clips:
-                    if hasattr(clip, 'close'):
-                        clip.close()
-            if 'final_video_clip' in locals() and hasattr(final_video_clip, 'close'):
-                final_video_clip.close()
-            if 'music_audio' in locals() and music_audio and hasattr(music_audio, 'close'):
-                music_audio.close()
-            if 'text_audio' in locals() and text_audio and hasattr(text_audio, 'close'):
-                text_audio.close()
-            if 'composite_audio' in locals() and composite_audio and hasattr(composite_audio, 'close'):
-                composite_audio.close()
-        except Exception as e:
-            print(f"Warning: Error during cleanup: {e}")
 
 def CreateAudioFile(
     output_file: str,
@@ -889,3 +694,107 @@ def CreateAudioFile(
 
 
 
+def CreateVideoFile(output_file: str, size: Tuple[int, int], resize_dim: str, audio_path: str, csv_path: str, text_column: str, video_paths: List[str], use_audio_duration: bool = False) -> None:
+    """Create and export a video with overlaid text and audio.
+    
+    Args:
+        output_file: Path for the output video file
+        size: Video dimensions (width, height)
+        resize_dim: Resize dimension ("width" or "height")
+        audio_path: Path to the audio file
+        csv_path: Path to the CSV file with texts
+        text_column: Column name for text overlay
+        video_paths: List of video file paths
+        use_audio_duration: If True, adjust video duration to match audio duration
+    """
+    texts = get_texts_from_csv(csv_path, text_column)
+    clips = []
+    for idx, path in enumerate(video_paths):
+        if not os.path.exists(path):
+            print(f"Warning: {path} not found. Skipping.")
+            continue
+        try:
+            clip = VideoFileClip(path)
+            clip = resize_and_crop_clip(clip, size, resize_dim)
+            if idx < len(texts):
+                clip = add_text_overlay(clip, texts[idx], size)
+            else:
+                print(f"Warning: No text for clip {idx+1}")
+            clips.append(clip)
+        except Exception as e:
+            print(f"Error processing {path}: {e}")
+
+    if not clips:
+        print("No video clips found. Exiting.")
+        return
+
+    # Get audio duration first if we need to match it
+    audio_duration = None
+    if use_audio_duration:
+        try:
+            audio_clip = AudioFileClip(audio_path)
+            audio_duration = audio_clip.duration
+            audio_clip.close()
+            print(f"Audio duration: {audio_duration:.2f}s")
+        except Exception as e:
+            print(f"Error reading audio file: {e}")
+            use_audio_duration = False
+
+    # Create initial video from clips
+    final_clip = concatenate_videoclips(clips, method="compose")
+    video_duration = final_clip.duration
+    print(f"Initial video duration: {video_duration:.2f}s")
+
+    # Adjust video duration to match audio if flag is set
+    if use_audio_duration and audio_duration:
+        if audio_duration < video_duration:
+            # Shorten video to match audio
+            print(f"Shortening video from {video_duration:.2f}s to {audio_duration:.2f}s")
+            final_clip = final_clip.with_duration(audio_duration)
+        elif audio_duration > video_duration:
+            # Extend video by repeating the last clip
+            print(f"Extending video from {video_duration:.2f}s to {audio_duration:.2f}s")
+            time_needed = audio_duration - video_duration
+            
+            if clips:  # Make sure we have clips
+                last_clip = clips[-1]
+                last_clip_duration = last_clip.duration
+                
+                # Calculate how many times we need to repeat the last clip
+                repeats_needed = int(time_needed / last_clip_duration) + 1
+                additional_clips = [last_clip] * repeats_needed
+                
+                # Create extended clip list
+                extended_clips = clips + additional_clips
+                final_clip = concatenate_videoclips(extended_clips, method="compose")
+                
+                # Trim to exact audio duration
+                final_clip = final_clip.with_duration(audio_duration)
+                print(f"Added {repeats_needed} repetitions of last clip")
+        
+        video_duration = final_clip.duration
+
+    if video_duration < MIN_DURATION:
+        print(f"Warning: Final video duration ({video_duration:.2f}s) is shorter than MIN_DURATION ({MIN_DURATION}s).")
+    else:
+        print(f"Final video duration: {video_duration:.2f}s")
+
+    try:
+        audio_clip = AudioFileClip(audio_path)
+        audio_duration = audio_clip.duration
+        if audio_duration > video_duration:
+            print(f"Warning: Audio duration ({audio_duration:.2f}s) is longer than video duration ({video_duration:.2f}s). Audio will be cut to video length.")
+            audio_clip = audio_clip.with_duration(video_duration)
+        final_with_audio = final_clip.with_audio(audio_clip)
+        final_with_audio.write_videofile(
+            output_file,
+            codec="libx264",
+            audio_codec="aac",
+            preset="ultrafast",
+            bitrate="20000k",
+            audio_fps=44100,
+            logger=None,
+            threads=4
+        )
+    except Exception as e:
+        print(f"Error exporting video: {e}")
