@@ -1,13 +1,6 @@
 import os
-import pandas as pd
-from typing import List, Tuple
-from moviepy.video.io.VideoFileClip import VideoFileClip
-from moviepy.audio.io.AudioFileClip import AudioFileClip
 from video_common import CreateAudioFile, CreateVideoFile, ConcatenateAudioFiles, ConcatenateVideoFiles, BASE_DIRECTORY
 
-
-# No need to import "moviepy.video.fx.all" directly.
-# All required effects (like fadein) are imported individually above.
 # === CONFIGURATION ===
 BASE_DIRECTORY_GREECE = os.path.join(BASE_DIRECTORY, "Greece_Automation")
 
@@ -29,7 +22,6 @@ INTRO_VIDEO_RU_HORIZONTAL = os.path.join(INTRO_BASE_DIRECTORY_GREECE_COMMON_ARTI
 INTRO_VIDEO_EN_VERTICAL = os.path.join(INTRO_BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS, "Intro_Output_vertical_1080x1920_EN.mp4")
 INTRO_VIDEO_RU_VERTICAL= os.path.join(INTRO_BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS, "Intro_Output_vertical_1080x1920_RU.mp4")
 
-
 TAIL_BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS = os.path.join(BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS, "Tail")
 
 TAIL_AUDIO_OUTPUT_FILE_EN = os.path.join(TAIL_BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS, "Tail_Audio_Output_EN.mp3")
@@ -39,9 +31,6 @@ TAIL_TEXT_AUDIO_OVERLAY_PATH_EN = os.path.join(TAIL_BASE_DIRECTORY_GREECE_COMMON
 TAIL_TEXT_AUDIO_OVERLAY_PATH_RU = os.path.join(TAIL_BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS, "Tail_RU_TG.mp3")   
 TAIL_TEXT_OVERLAY_CSV_PATH = os.path.join(TAIL_BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS, "Tail_Text_Overlay_EN_RU.csv")
 TAIL_VIDEO_PATHS = [os.path.join(TAIL_BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS, f"Tail_{i}.mp4") for i in range(1, 3)]
-# TAIL_OUTPUT_FILE = os.path.join(TAIL_BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS, "Tail_Output.mp4")
-
-
 
 BASE_DIRECTORY_GREECE_CURRENT = os.path.join(BASE_DIRECTORY_GREECE, "TragicBraveryHector")
 VIDEO_PATHS = [os.path.join(BASE_DIRECTORY_GREECE_CURRENT, f"prompt {i}.mp4") for i in range(1, 11)]
@@ -69,126 +58,124 @@ FINAL_VIDEO_RU_VERTICAL = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "final_ver
 DEFAULT_FONT = "DejaVuSans"  # Safe fallback font
 
 
-if __name__ == "__main__":
-
-    # """ final_horizontal_1920x1080_EN  """
-
-    # Intro: first create the audio file
+def create_complete_video_for_greece(language: str, orientation: str):
+    """
+    Creates a complete video with intro, main content, and tail for the specified language and orientation.
+    
+    Args:
+        language: Language code ("EN" or "RU")
+        orientation: Video orientation ("horizontal" or "vertical")
+    """
+    print(f"\n=== Creating {language} {orientation} video ===")
+    
+    # Define dimensions based on orientation
+    if orientation == "horizontal":
+        size = (1920, 1080)
+        resize_dim = "width"
+    else:  # vertical
+        size = (1080, 1920)
+        resize_dim = "height"
+        
+    # Define language-specific variables
+    text_column = "english_text" if language == "EN" else "russian_text"
+    intro_audio = INTRO_AUDIO_OUTPUT_FILE_EN if language == "EN" else INTRO_AUDIO_OUTPUT_FILE_RU
+    intro_text_audio = INTRO_TEXT_AUDIO_OVERLAY_PATH_EN if language == "EN" else INTRO_TEXT_AUDIO_OVERLAY_PATH_RU
+    tail_audio = TAIL_AUDIO_OUTPUT_FILE_EN if language == "EN" else TAIL_AUDIO_OUTPUT_FILE_RU
+    tail_text_audio = TAIL_TEXT_AUDIO_OVERLAY_PATH_EN if language == "EN" else TAIL_TEXT_AUDIO_OVERLAY_PATH_RU
+    main_audio = AUDIO_PATH_EN if language == "EN" else AUDIO_PATH_RU
+    audio_with_tail = AUDIO_PATH_WITH_TAIL_EN if language == "EN" else AUDIO_PATH_WITH_TAIL_RU
+    
+    # Define output file paths
+    if language == "EN" and orientation == "horizontal":
+        intro_video = INTRO_VIDEO_EN_HORIZONTAL
+        main_tail_video = VIDEO_EN_HORIZONTAL_MAIN_PLUS_TAIL
+        final_video = FINAL_VIDEO_EN_HORIZONTAL
+    elif language == "RU" and orientation == "horizontal":
+        intro_video = INTRO_VIDEO_RU_HORIZONTAL
+        main_tail_video = VIDEO_RU_HORIZONTAL_MAIN_PLUS_TAIL
+        final_video = FINAL_VIDEO_RU_HORIZONTAL
+    elif language == "EN" and orientation == "vertical":
+        intro_video = INTRO_VIDEO_EN_VERTICAL
+        main_tail_video = VIDEO_EN_VERTICAL_MAIN_PLUS_TAIL
+        final_video = FINAL_VIDEO_EN_VERTICAL
+    else:  # RU and vertical
+        intro_video = INTRO_VIDEO_RU_VERTICAL
+        main_tail_video = VIDEO_RU_VERTICAL_MAIN_PLUS_TAIL
+        final_video = FINAL_VIDEO_RU_VERTICAL
+    
+    # Step 1: Create intro audio
+    print(f"Creating intro audio for {language}...")
     CreateAudioFile(
-        output_file=INTRO_AUDIO_OUTPUT_FILE_EN,
+        output_file=intro_audio,
         music_overlay_path=INTRO_MUSIC_OVERLAY_PATH,
-        text_audio_overlay_path=INTRO_TEXT_AUDIO_OVERLAY_PATH_EN,
+        text_audio_overlay_path=intro_text_audio,
         set_duration_by_text_audio=True,
-        time_of_music_before_voice=0.2,  # seconds of music before voice starts
-        time_of_music_after_voice=1.5  # Adjust as needed
-   )
+        time_of_music_before_voice=0.2,
+        time_of_music_after_voice=1.5
+    )
     
-    # Intro: Create video
+    # Step 2: Create intro video
+    print(f"Creating intro video for {language} {orientation}...")
     CreateVideoFile(
-        output_file=INTRO_VIDEO_EN_HORIZONTAL,
-        size=(1920, 1080),
-        resize_dim="width",
-        audio_path=INTRO_AUDIO_OUTPUT_FILE_EN,  # Simple audio file, not prepared audio
-        csv_path=INTRO_TEXT_OVERLAY_CSV_PATH,      # CSV file with texts
-        text_column="english_text",
+        output_file=intro_video,
+        size=size,
+        resize_dim=resize_dim,
+        audio_path=intro_audio,
+        csv_path=INTRO_TEXT_OVERLAY_CSV_PATH,
+        text_column=text_column,
         video_paths=INTRO_VIDEO_PATHS,
-        use_audio_duration=False  # Add this flag to use audio duration
-    ) 
-
-   # TAIL: first create the audio file
+        use_audio_duration=False
+    )
+    
+    # Step 3: Create tail audio
+    print(f"Creating tail audio for {language}...")
     CreateAudioFile(
-        output_file=TAIL_AUDIO_OUTPUT_FILE_EN,
+        output_file=tail_audio,
         music_overlay_path=TAIL_MUSIC_OVERLAY_PATH,
-        text_audio_overlay_path=TAIL_TEXT_AUDIO_OVERLAY_PATH_EN,
-        set_duration_by_text_audio=True,        
-        time_of_music_before_voice=2,  # 0.8 seconds of music before voice starts
-        time_of_music_after_voice=2  # Adjust as needed
+        text_audio_overlay_path=tail_text_audio,
+        set_duration_by_text_audio=True,
+        time_of_music_before_voice=2,
+        time_of_music_after_voice=2
     )
-
-    # MAin + Tail: Apply effects during concatenation
+    
+    # Step 4: Combine main and tail audio
+    print(f"Combining main and tail audio for {language}...")
     ConcatenateAudioFiles(
-        audio_paths=[AUDIO_PATH_EN, TAIL_AUDIO_OUTPUT_FILE_EN],
-        output_file=AUDIO_PATH_WITH_TAIL_EN,
-        silence_between=0.5  # seconds of silence between main audio and tail
+        audio_paths=[main_audio, tail_audio],
+        output_file=audio_with_tail,
+        silence_between=0.5
     )
-
-
+    
+    # Step 5: Create main+tail video
+    print(f"Creating main+tail video for {language} {orientation}...")
     CreateVideoFile(
-        output_file=VIDEO_EN_HORIZONTAL_MAIN_PLUS_TAIL,
-        size=(1920, 1080),
-        resize_dim="width",
-        audio_path=AUDIO_PATH_WITH_TAIL_EN,
-        csv_path=[CSV_PATH, TAIL_TEXT_OVERLAY_CSV_PATH],  # Now accepts a list of paths
-        text_column="english_text",
+        output_file=main_tail_video,
+        size=size,
+        resize_dim=resize_dim,
+        audio_path=audio_with_tail,
+        csv_path=[CSV_PATH, TAIL_TEXT_OVERLAY_CSV_PATH],
+        text_column=text_column,
         video_paths=VIDEO_PATHS + TAIL_VIDEO_PATHS,
-        use_audio_duration=True  # Add this flag to use audio duration
-    ) 
-
-    ConcatenateVideoFiles(
-        video_paths=[
-            INTRO_VIDEO_EN_HORIZONTAL,
-            VIDEO_EN_HORIZONTAL_MAIN_PLUS_TAIL
-        ],
-        output_file=FINAL_VIDEO_EN_HORIZONTAL,
+        use_audio_duration=True
     )
-
-
-
-
-
-
-
-
-
-
-
-
-    # # Russian versions
-    # CreateVideoFile(
-    #     os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "final_vertical_1080x1920_RU.mp4"),
-    #     (1080, 1920),
-    #     "height",
-    #     AUDIO_PATH_RU,
-    #     CSV_PATH,
-    #     "russian_text",
-    #     VIDEO_PATHS,
-    #     use_audio_duration=False  # Add this flag to use audio duration
-    # )
     
-
-
-
-
-    # CreateVideoFile(
-    #     os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "final_horizontal_1920x1080_RU.mp4"),
-    #     (1920, 1080),
-    #     "width",
-    #     AUDIO_PATH_RU,
-    #     CSV_PATH,
-    #     "russian_text",
-    #     VIDEO_PATHS,
-    #     use_audio_duration=False  # Add this flag to use audio duration
-    # ) 
+    # Step 6: Concatenate intro with main+tail
+    print(f"Creating final combined video for {language} {orientation}...")
+    ConcatenateVideoFiles(
+        video_paths=[intro_video, main_tail_video],
+        output_file=final_video
+    )
     
-    # # English versions
-    # CreateVideoFile(
-    #     os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "final_vertical_1080x1920_EN.mp4"),
-    #     (1080, 1920),
-    #     "height",
-    #     AUDIO_PATH_EN, 
-    #     CSV_PATH,
-    #     "english_text",
-    #     VIDEO_PATHS,
-    #     use_audio_duration=False  # Add this flag to use audio duration
-    # ) 
-    # CreateVideoFile(
-    #     os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "final_horizontal_1920x1080_EN.mp4"),
-    #     (1920, 1080),
-    #     "width",
-    #     AUDIO_PATH_EN,
-    #     CSV_PATH,
-    #     "english_text",
-    #     VIDEO_PATHS,
-    #     use_audio_duration=False  # Add this flag to use audio duration
-    # ) 
+    print(f"✓ Completed {language} {orientation} video: {final_video}")
+
+
+if __name__ == "__main__":
+    # Create all four video variants
+    create_complete_video_for_greece(language="EN", orientation="horizontal")
+    create_complete_video_for_greece(language="RU", orientation="horizontal")
+    create_complete_video_for_greece(language="EN", orientation="vertical")
+    create_complete_video_for_greece(language="RU", orientation="vertical")
+
+    # Or selectively create only specific variants:
+    # create_complete_video(language="EN", orientation="horizontal")
 

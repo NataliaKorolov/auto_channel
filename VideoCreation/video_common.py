@@ -12,6 +12,7 @@ from pathlib import Path
 from PIL import Image
 import re  # Add this import at the top with other imports
 import cv2  # Add for GetVideoInfo function
+from datetime import datetime
 
 
 
@@ -1001,10 +1002,6 @@ def ConcatenateAudioFiles(
     Args:
         audio_paths: List of paths to audio files to concatenate
         output_file: Path for the output concatenated audio
-        crossfade_duration: Duration of crossfade between clips in seconds (default: 0)
-        volume_adjustments: Dictionary mapping clip index to volume multiplier (default: None)
-        add_fade_in: Duration of fade in effect for the first clip in seconds (default: 0)
-        add_fade_out: Duration of fade out effect for the last clip in seconds (default: 0)
         silence_between: Duration of silence to insert between clips in seconds (default: 0)
     
     Returns:
@@ -1032,16 +1029,6 @@ def ConcatenateAudioFiles(
         if not audio_clips:
             print("No valid audio clips found")
             return False
-            
-        # # Apply fade in to first clip if requested
-        # if add_fade_in > 0 and audio_clips:
-        #     audio_clips[0] = audio_clips[0].fadein(add_fade_in)
-        #     print(f"Added {add_fade_in}s fade in to first clip")
-            
-        # # Apply fade out to last clip if requested
-        # if add_fade_out > 0 and audio_clips:
-        #     audio_clips[-1] = audio_clips[-1].fadeout(add_fade_out)
-        #     print(f"Added {add_fade_out}s fade out to last clip")
         
         # Insert silence between clips if requested
         if silence_between > 0 and len(audio_clips) > 1:
@@ -1057,12 +1044,8 @@ def ConcatenateAudioFiles(
             audio_clips = clips_with_silence
             print(f"Inserted {silence_between}s silence between clips")
         
-        # Concatenate audio clips with or without crossfade
+        # Concatenate audio clips
         print("Concatenating audio clips...")
-        # if crossfade_duration > 0:
-        #     final_audio = concatenate_audioclips(audio_clips, crossfade_duration)
-        #     print(f"Applied {crossfade_duration}s crossfade between clips")
-        # else:
         final_audio = concatenate_audioclips(audio_clips)
         
         # Ensure output directory exists
@@ -1091,3 +1074,110 @@ def ConcatenateAudioFiles(
                 clip.close()
             except:
                 pass
+
+def add_voice_to_video(video_path: str, voice_path: str, output_path: str = None, output_dir: str = None) -> str:
+    """
+    Add voice audio to an existing video with music, placing the voice in the middle of the video timeline.
+    
+    Args:
+        video_path: Path to the input video file
+        voice_path: Path to the voice audio file
+        output_path: Optional specific output path for the result video
+        output_dir: Optional directory to save the result video (uses auto-generated filename)
+        
+    Returns:
+        str: Path to the created video file, or None if failed
+        
+    Raises:
+        ValueError: If voice audio is longer than video duration
+    """
+    try:
+        
+        # Load the video
+        video_clip = VideoFileClip(video_path)
+        
+        # Load the voice audio
+        voice_audio = AudioFileClip(voice_path)
+        
+        # Check if voice is longer than video
+        if voice_audio.duration > video_clip.duration:
+            video_clip.close()
+            voice_audio.close()
+            raise ValueError(f"Voice audio duration ({voice_audio.duration:.2f}s) is longer than video duration ({video_clip.duration:.2f}s)")
+        
+        # Calculate start time to center the voice
+        start_time = (video_clip.duration - voice_audio.duration) / 2
+        
+        # Set the voice audio to start at the calculated time
+        voice_audio = voice_audio.with_start(start_time)
+        
+        # Get the original video audio (music)
+        original_audio = video_clip.audio
+        
+        # Composite the audio tracks (original music + voice)
+        if original_audio:
+            composite_audio = CompositeAudioClip([original_audio, voice_audio])
+        else:
+            # If video has no audio, just use the voice
+            composite_audio = voice_audio
+        
+        # Set the composite audio to the video
+        final_video = video_clip.with_audio(composite_audio)
+        
+        # Determine output path
+        if output_path:
+            result_path = output_path
+        elif output_dir:
+            # Generate filename based on input video name
+            video_name = os.path.splitext(os.path.basename(video_path))[0]
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{video_name}_with_voice_{timestamp}.mp4"
+            result_path = os.path.join(output_dir, filename)
+        else:
+            # Use same directory as input video
+            video_dir = os.path.dirname(video_path)
+            video_name = os.path.splitext(os.path.basename(video_path))[0]
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{video_name}_with_voice_{timestamp}.mp4"
+            result_path = os.path.join(video_dir, filename)
+        
+        # Ensure output directory exists
+        os.makedirs(os.path.dirname(result_path), exist_ok=True)
+        
+        # Write the final video
+        final_video.write_videofile(
+            result_path,
+            codec='libx264',
+            audio_codec='aac',
+            temp_audiofile='temp-audio.m4a',
+            remove_temp=True
+        )
+        
+        # Clean up
+        video_clip.close()
+        voice_audio.close()
+        final_video.close()
+        if original_audio:
+            original_audio.close()
+        composite_audio.close()
+        
+        print(f"Successfully added voice to video: {result_path}")
+        return result_path
+        
+    except Exception as e:
+        print(f"Error adding voice to video: {str(e)}")
+        # Clean up in case of error
+        try:
+            if 'video_clip' in locals():
+                video_clip.close()
+            if 'voice_audio' in locals():
+                voice_audio.close()
+            if 'final_video' in locals():
+                final_video.close()
+            if 'original_audio' in locals() and original_audio:
+                original_audio.close()
+            if 'composite_audio' in locals():
+                composite_audio.close()
+        except:
+            pass
+        return None

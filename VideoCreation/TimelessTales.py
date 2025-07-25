@@ -7,7 +7,7 @@ from video_common import (
     VideoOverlayEntry,
     BASE_DIRECTORY
 )
-from video_common import add_text_to_image, TextStyle, TextOverlay
+from video_common import add_text_to_image, add_voice_to_video, TextStyle, TextOverlay
 
 # Define TimelessTales base directory
 BASE_DIRECTORY_TT = os.path.join(BASE_DIRECTORY, "TT")
@@ -140,16 +140,16 @@ def process_video_entries(csv_path: str) -> List[str]:
         logger.error(f"Error loading entries from Excel: {str(e)}")
         return []
 
-if __name__ == "__main__":
-    csv_path = os.path.join(BASE_DIRECTORY_TT, "TimelessTales_Video_Tracker.xlsx")
-    created_videos = process_video_entries(csv_path)
+# if __name__ == "__main__":
+#     csv_path = os.path.join(BASE_DIRECTORY_TT, "TimelessTales_Video_Tracker.xlsx")
+#     created_videos = process_video_entries(csv_path)
     
-    if created_videos:
-        logger.info(f"Successfully created {len(created_videos)} videos")
-        for video in created_videos:
-            logger.info(f"Created: {video}")
-    else:
-        logger.error("No videos were created")
+#     if created_videos:
+#         logger.info(f"Successfully created {len(created_videos)} videos")
+#         for video in created_videos:
+#             logger.info(f"Created: {video}")
+#     else:
+#         logger.error("No videos were created")
 
 
 
@@ -305,3 +305,23 @@ def test_image_texts_overlay():
 #             print(f"Successfully created video: {video_path}")
 #         else:
 #             print("Failed to create video")
+
+
+
+
+# Uncomment to test
+if __name__ == "__main__":
+
+    # Intro
+    # video_path = resolve_path(r"assets\intro\TT_INTRO.mp4")
+    # voice_path = resolve_path(r"assets\intro\Welcome_RU_TT.mp3")
+    # output_path = resolve_path(r"assets\intro\TT_INTRO_FINAL.mp4")
+    
+    # add_voice_to_video(video_path=video_path, voice_path=voice_path, output_path=output_path)
+
+    # Tail
+    video_path = resolve_path(r"assets\tail\TT_TAIL.mp4")
+    voice_path = resolve_path(r"assets\tail\Tail_RU_TT.mp3")
+    output_path = resolve_path(r"assets\tail\TT_TAIL_FINAL.mp4")
+    
+    add_voice_to_video(video_path=video_path, voice_path=voice_path, output_path=output_path)
