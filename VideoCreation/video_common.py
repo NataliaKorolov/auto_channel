@@ -1,18 +1,19 @@
 import os
 import pandas as pd  # Add this import for Excel support
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict, Any, Union
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
 from moviepy.video.VideoClip import TextClip, ImageClip
 from moviepy.audio.io.AudioFileClip import AudioFileClip
+from moviepy.audio.AudioClip import concatenate_audioclips, CompositeAudioClip
 from moviepy import concatenate_videoclips
 from dataclasses import dataclass, field
 from pathlib import Path
 from PIL import Image
-from pathlib import Path
-from moviepy.audio.fx.MultiplyVolume import MultiplyVolume
-from moviepy.audio.AudioClip import CompositeAudioClip
 import re  # Add this import at the top with other imports
+import cv2  # Add for GetVideoInfo function
+
+
 
 # Base directory constants
 BASE_DIRECTORY = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot"
@@ -22,18 +23,51 @@ DEFAULT_FONT = "DejaVuSans"
 MIN_DURATION = 1  # seconds
 
 
-def get_texts_from_csv(csv_path: str, column: str) -> List[str]:
-    """Read texts from a specified column in a CSV or Excel file."""
-    try:
-        # Check file extension to determine how to read
-        if csv_path.lower().endswith('.xlsx') or csv_path.lower().endswith('.xls'):
-            df = pd.read_excel(csv_path, engine='openpyxl')
-        else:
-            df = pd.read_csv(csv_path)
-        return df[column].fillna("").tolist()
-    except Exception as e:
-        print(f"Error reading file or column '{column}': {e}")
-        return []
+def get_texts_from_csv(csv_paths: Union[str, List[str]], column: str) -> List[str]:
+    """
+    Read texts from a specified column in one or multiple CSV or Excel files.
+    
+    Args:
+        csv_paths: Path to a single file or a list of file paths
+        column: Column name containing the text data
+        
+    Returns:
+        Combined list of texts from all files
+    """
+    result = []
+    
+    # Convert single path to list for uniform handling
+    if isinstance(csv_paths, str):
+        paths_to_process = [csv_paths]
+    else:
+        paths_to_process = csv_paths
+    
+    # Process each file
+    for csv_path in paths_to_process:
+        try:
+            # Check file extension to determine how to read
+            if csv_path.lower().endswith('.xlsx') or csv_path.lower().endswith('.xls'):
+                df = pd.read_excel(csv_path, engine='openpyxl')
+                print(f"Reading Excel file: {csv_path}")
+            else:
+                df = pd.read_csv(csv_path)
+                print(f"Reading CSV file: {csv_path}")
+                
+            # Check if column exists
+            if column not in df.columns:
+                print(f"Warning: Column '{column}' not found in {csv_path}")
+                continue
+                
+            # Add texts from this file to results
+            file_texts = df[column].fillna("").tolist()
+            result.extend(file_texts)
+            print(f"Added {len(file_texts)} texts from {csv_path}")
+            
+        except Exception as e:
+            print(f"Error reading file {csv_path} or column '{column}': {e}")
+    
+    print(f"Total texts collected: {len(result)}")
+    return result
 
 def add_text_overlay(clip: VideoFileClip, text: str, size: Tuple[int, int]) -> CompositeVideoClip:
     """Overlay centered text on a video clip."""
@@ -586,21 +620,28 @@ def load_video_overlay_entries_from_excel(excel_path: str) -> List[VideoOverlayE
 def CreateAudioFile(
     output_file: str,
     music_overlay_path: str, 
-    text_audio_overlay_path: str
+    text_audio_overlay_path: str,
+    set_duration_by_text_audio: bool = True,
+    time_of_music_after_voice: float = 0.0,
+    time_of_music_before_voice: float = 0.0
 ) -> None:
     """
     Create and export an audio file by combining music and text audio tracks.
-    The final duration is determined by the longer of the two input audio files.
-    
+    The final duration is determined by the longer of the two input audio files,
+    or by text audio duration + music timing parameters if set_duration_by_text_audio is True.
+
     Args:
         output_file: Full path for the output audio file
         music_overlay_path: Full path to background music file
         text_audio_overlay_path: Full path to text audio file
+        set_duration_by_text_audio: If True, set duration to text audio + music timing parameters
+        time_of_music_after_voice: Time in seconds for music to last after the voice
+        time_of_music_before_voice: Time in seconds for music to play before the voice starts
     """
     music_audio = None
     text_audio = None
     composite_audio = None
-    
+
     try:
         # Load audio files and check durations
         if os.path.exists(music_overlay_path):
@@ -608,57 +649,69 @@ def CreateAudioFile(
             print(f"Music audio duration: {music_audio.duration:.2f}s")
         else:
             print(f"Warning: Music file not found: {music_overlay_path}")
-            
+
         if os.path.exists(text_audio_overlay_path):
             text_audio = AudioFileClip(text_audio_overlay_path)
             print(f"Text audio duration: {text_audio.duration:.2f}s")
         else:
             print(f"Warning: Text audio file not found: {text_audio_overlay_path}")
-            
+
         # Check if we have at least one audio file
         if not music_audio and not text_audio:
             print("Error: No valid audio files found")
             return
-            
-        # Determine final duration (max of both audio files)
-        final_duration = 0
-        if music_audio and text_audio:
-            final_duration = max(music_audio.duration, text_audio.duration)
-            print(f"Final audio duration: {final_duration:.2f}s (max of both tracks)")
-        elif music_audio:
-            final_duration = music_audio.duration
-            print(f"Final audio duration: {final_duration:.2f}s (music only)")
-        elif text_audio:
-            final_duration = text_audio.duration
-            print(f"Final audio duration: {final_duration:.2f}s (text only)")
+
+        # Determine final duration
+        if set_duration_by_text_audio and text_audio:
+            final_duration = time_of_music_before_voice + text_audio.duration + time_of_music_after_voice
+            print(f"Final audio duration: {final_duration:.2f}s ({time_of_music_before_voice}s intro + {text_audio.duration:.2f}s text + {time_of_music_after_voice}s outro)")
+        else:
+            if music_audio and text_audio:
+                final_duration = max(music_audio.duration, text_audio.duration)
+                print(f"Final audio duration: {final_duration:.2f}s (max of both tracks)")
+            elif music_audio:
+                final_duration = music_audio.duration
+                print(f"Final audio duration: {final_duration:.2f}s (music only)")
+            elif text_audio:
+                final_duration = text_audio.duration
+                print(f"Final audio duration: {final_duration:.2f}s (text only)")
+            else:
+                print("Error: No valid audio files found")
+                return
 
         # Prepare audio tracks for mixing
         audio_tracks = []
-        
-        # Handle text audio
+
+        # Handle text audio - now with delayed start
         if text_audio:
-            # Always use the original text audio duration, don't extend it
-            text_to_use = text_audio
+            if time_of_music_before_voice > 0:
+                # Create text audio that starts after the specified delay
+                text_to_use = text_audio.with_start(time_of_music_before_voice)
+                print(f"Set text audio to start at {time_of_music_before_voice:.2f}s")
+            else:
+                text_to_use = text_audio
+            
             audio_tracks.append(text_to_use)
             print("Added text audio track")
-        
+
         # Handle music audio
         if music_audio:
             if music_audio.duration < final_duration:
+                print(f"Warning: Music duration ({music_audio.duration:.2f}s) is shorter than required final duration ({final_duration:.2f}s). Music will be looped.")
                 # Loop music to cover the full duration
                 loops_needed = int(final_duration / music_audio.duration) + 1
-                music_looped = concatenate_videoclips([music_audio] * loops_needed)
+                music_looped = concatenate_audioclips([music_audio] * loops_needed)
                 music_extended = music_looped.subclipped(0, final_duration)
             else:
                 # Trim to final duration
                 music_extended = music_audio.subclipped(0, final_duration)
-            
-            # Reduce music volume to 30% using volumex effect
-            music_low = music_extended.with_effects([MultiplyVolume(0.3)])
+
+            # Reduce music volume to 30%
+            music_low = music_extended  # .volumex(0.3)
             audio_tracks.append(music_low)
             print("Added background music track (30% volume)")
 
-        # Create composite audio - let MoviePy handle the duration automatically
+        # Create composite audio
         if len(audio_tracks) > 1:
             composite_audio = CompositeAudioClip(audio_tracks)
             print("Created composite audio with multiple tracks")
@@ -669,17 +722,17 @@ def CreateAudioFile(
         # Ensure output directory exists
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
-        # Export audio file with simplified parameters
+        # Export audio file
         print(f"Exporting audio to: {output_file}")
         composite_audio.write_audiofile(output_file)
-        
+
         print(f"Successfully created audio file: {output_file}")
 
     except Exception as e:
         print(f"Error creating audio file: {e}")
         import traceback
         traceback.print_exc()
-    
+
     finally:
         # Clean up resources
         try:
@@ -798,3 +851,243 @@ def CreateVideoFile(output_file: str, size: Tuple[int, int], resize_dim: str, au
         )
     except Exception as e:
         print(f"Error exporting video: {e}")
+
+
+def ConcatenateVideoFiles(
+    video_paths: List[str],
+    output_file: str,
+    check_compatibility: bool = True
+) -> bool:
+    """
+    Concatenate multiple video files into a single video.
+    
+    Args:
+        video_paths: List of paths to video files to concatenate
+        output_file: Path for the output concatenated video
+        check_compatibility: Whether to check size compatibility (default: True)
+    
+    Returns:
+        bool: True if successful, False otherwise
+    
+    Raises:
+        ValueError: If videos have incompatible sizes
+        FileNotFoundError: If any video file doesn't exist
+    """
+    
+    if not video_paths:
+        raise ValueError("No video paths provided")
+    
+    # Check if all files exist
+    for path in video_paths:
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Video file not found: {path}")
+    
+    video_clips = []
+    reference_size = None
+    
+    try:
+        # Load video clips and check compatibility
+        for i, path in enumerate(video_paths):
+            print(f"Loading video {i+1}/{len(video_paths)}: {os.path.basename(path)}")
+            
+            # Get video info using OpenCV for quick size check
+            if check_compatibility:
+                cap = cv2.VideoCapture(path)
+                if not cap.isOpened():
+                    raise ValueError(f"Cannot open video file: {path}")
+                
+                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                current_size = (width, height)
+                cap.release()
+                
+                if reference_size is None:
+                    reference_size = current_size
+                    print(f"Reference size set to: {reference_size}")
+                elif current_size != reference_size:
+                    error_msg = (
+                        f"Size mismatch detected!\n"
+                        f"Reference size: {reference_size}\n"
+                        f"File '{os.path.basename(path)}' size: {current_size}\n"
+                        f"All videos must have the same dimensions for concatenation."
+                    )
+                    raise ValueError(error_msg)
+            
+            # Load with MoviePy
+            clip = VideoFileClip(path)
+            video_clips.append(clip)
+            print(f"Loaded: {os.path.basename(path)} - Duration: {clip.duration:.2f}s")
+        
+        # Concatenate videos
+        print("Concatenating videos...")
+        final_video = concatenate_videoclips(video_clips, method="compose")
+        
+        # Write output
+        print(f"Writing concatenated video to: {output_file}")
+        final_video.write_videofile(
+            output_file,
+            codec='libx264',
+            audio_codec='aac',
+            temp_audiofile='temp-audio.m4a',
+            remove_temp=True
+        )
+        
+        total_duration = sum(clip.duration for clip in video_clips)
+        print(f"Successfully concatenated {len(video_paths)} videos")
+        print(f"Total duration: {total_duration:.2f}s")
+        print(f"Output saved to: {output_file}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"Error during concatenation: {str(e)}")
+        return False
+        
+    finally:
+        # Clean up clips
+        for clip in video_clips:
+            if clip:
+                clip.close()
+
+def GetVideoInfo(video_path: str) -> Optional[dict]:
+    """
+    Get basic information about a video file.
+    
+    Args:
+        video_path: Path to the video file
+    
+    Returns:
+        dict: Video information including size, duration, fps
+        None: If video cannot be read
+    """
+    if not os.path.exists(video_path):
+        return None
+    
+    try:
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            return None
+        
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration = frame_count / fps if fps > 0 else 0
+        
+        cap.release()
+        
+        return {
+            'width': width,
+            'height': height,
+            'size': (width, height),
+            'fps': fps,
+            'frame_count': frame_count,
+            'duration': duration,
+            'filename': os.path.basename(video_path)
+        }
+        
+    except Exception as e:
+        print(f"Error getting video info for {video_path}: {str(e)}")
+        return None
+
+def ConcatenateAudioFiles(
+    audio_paths: List[str],
+    output_file: str,
+    silence_between: float = 0
+) -> bool:
+    """
+    Concatenate multiple audio files into a single audio file.
+    
+    Args:
+        audio_paths: List of paths to audio files to concatenate
+        output_file: Path for the output concatenated audio
+        crossfade_duration: Duration of crossfade between clips in seconds (default: 0)
+        volume_adjustments: Dictionary mapping clip index to volume multiplier (default: None)
+        add_fade_in: Duration of fade in effect for the first clip in seconds (default: 0)
+        add_fade_out: Duration of fade out effect for the last clip in seconds (default: 0)
+        silence_between: Duration of silence to insert between clips in seconds (default: 0)
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    if not audio_paths:
+        print("No audio paths provided")
+        return False
+    
+    audio_clips = []
+    
+    try:
+        # Load all audio clips
+        for i, path in enumerate(audio_paths):
+            if not os.path.exists(path):
+                print(f"Warning: Audio file not found: {path}")
+                continue
+                
+            print(f"Loading audio {i+1}/{len(audio_paths)}: {os.path.basename(path)}")
+            clip = AudioFileClip(path)
+            
+            # Add to clip list
+            audio_clips.append(clip)
+            
+        if not audio_clips:
+            print("No valid audio clips found")
+            return False
+            
+        # # Apply fade in to first clip if requested
+        # if add_fade_in > 0 and audio_clips:
+        #     audio_clips[0] = audio_clips[0].fadein(add_fade_in)
+        #     print(f"Added {add_fade_in}s fade in to first clip")
+            
+        # # Apply fade out to last clip if requested
+        # if add_fade_out > 0 and audio_clips:
+        #     audio_clips[-1] = audio_clips[-1].fadeout(add_fade_out)
+        #     print(f"Added {add_fade_out}s fade out to last clip")
+        
+        # Insert silence between clips if requested
+        if silence_between > 0 and len(audio_clips) > 1:
+            from moviepy.audio.AudioClip import AudioClip
+            silence = AudioClip(lambda t: 0, duration=silence_between)
+            clips_with_silence = []
+            
+            for i, clip in enumerate(audio_clips):
+                clips_with_silence.append(clip)
+                if i < len(audio_clips) - 1:  # Don't add silence after last clip
+                    clips_with_silence.append(silence)
+                    
+            audio_clips = clips_with_silence
+            print(f"Inserted {silence_between}s silence between clips")
+        
+        # Concatenate audio clips with or without crossfade
+        print("Concatenating audio clips...")
+        # if crossfade_duration > 0:
+        #     final_audio = concatenate_audioclips(audio_clips, crossfade_duration)
+        #     print(f"Applied {crossfade_duration}s crossfade between clips")
+        # else:
+        final_audio = concatenate_audioclips(audio_clips)
+        
+        # Ensure output directory exists
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        
+        # Write the final audio to file
+        print(f"Writing concatenated audio to: {output_file}")
+        final_audio.write_audiofile(output_file)
+        
+        total_duration = sum(clip.duration for clip in audio_clips)
+        print(f"Successfully concatenated {len(audio_clips)} audio clips")
+        print(f"Total duration: {total_duration:.2f}s")
+        
+        return True
+        
+    except Exception as e:
+        print(f"Error during audio concatenation: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
+        
+    finally:
+        # Clean up clips
+        for clip in audio_clips:
+            try:
+                clip.close()
+            except:
+                pass

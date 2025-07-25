@@ -13,25 +13,14 @@ if __name__ == "__main__":
     VIDEO_PATHS = [os.path.join(BASE_DIRECTORY_GREECE, "Common_Artifacts", "Intro", f"Intro_{i}.mp4") for i in range(1, 11)]
     OUTPUT_FILE = os.path.join(BASE_DIRECTORY_GREECE, "Common_Artifacts", "Intro", "Intro_Output.mp4")
 
-    # # First create the prepared audio file
-    # CreateAudioFile(
-    #     output_file=AUDIO_OUTPUT_FILE,
-    #     music_overlay_path=MUSIC_OVERLAY_PATH,
-    #     text_audio_overlay_path=TEXT_AUDIO_OVERLAY_PATH
-    # )
+    # First create the prepared audio file
+    CreateAudioFile(
+        output_file=AUDIO_OUTPUT_FILE,
+        music_overlay_path=MUSIC_OVERLAY_PATH,
+        text_audio_overlay_path=TEXT_AUDIO_OVERLAY_PATH
+    )
     
-    # # Then create the video using the prepared audio
-    # CreateVideoFile(
-    #     output_file=os.path.join(BASE_DIRECTORY, "Common_Artifacts", "Intro", "Intro_Output.mp4"),
-    #     video_paths=VIDEO_PATHS,
-    #     prepared_audio_path=AUDIO_OUTPUT_FILE,
-    #     overlays_xlsx_path=os.path.join(BASE_DIRECTORY, "Common_Artifacts", "Intro", "Intro_Text_Overlay.xlsx"),
-    #     size=(1920, 1080),
-    #     resize_dim="width",
-    #     text_column="english_text"
-    # )
-
-   # Create video using CreateVideoFile
+    # Create video using CreateVideoFile
     CreateVideoFile(
         output_file=OUTPUT_FILE,
         size=(1920, 1080),
@@ -42,3 +31,4 @@ if __name__ == "__main__":
         video_paths=VIDEO_PATHS,
         use_audio_duration=True  # Add this flag to use audio duration
     ) 
+
