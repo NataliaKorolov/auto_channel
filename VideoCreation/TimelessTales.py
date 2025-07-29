@@ -319,9 +319,9 @@ if __name__ == "__main__":
     
     # add_voice_to_video(video_path=video_path, voice_path=voice_path, output_path=output_path)
 
-    # Tail
-    video_path = resolve_path(r"assets\tail\TT_TAIL.mp4")
-    voice_path = resolve_path(r"assets\tail\Tail_RU_TT.mp3")
-    output_path = resolve_path(r"assets\tail\TT_TAIL_FINAL.mp4")
+    # # Tail
+    # video_path = resolve_path(r"assets\tail\TT_TAIL.mp4")
+    # voice_path = resolve_path(r"assets\tail\Tail_RU_TT.mp3")
+    # output_path = resolve_path(r"assets\tail\TT_TAIL_FINAL.mp4")
     
-    add_voice_to_video(video_path=video_path, voice_path=voice_path, output_path=output_path)
+    # add_voice_to_video(video_path=video_path, voice_path=voice_path, output_path=output_path)
