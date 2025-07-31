@@ -103,24 +103,14 @@ def process_video_entries(csv_path: str) -> List[str]:
 
                 if image_clip:
                     # Create video with audio
-                    if entry.output_video_path:
-                        # If output_video_path is specified, use the full path
-                        video_path = create_video_with_audio(
-                            image_clip=image_clip,
-                            audio_path=entry.audio_path,
-                            output_path=entry.output_video_path,
-                            head_video_path=entry.head_video_path if entry.head_video_path else None,
-                            tail_video_path=entry.tail_video_path if entry.tail_video_path else None
-                        )
-                    else:
-                        # Otherwise use the default directory with auto-generated name
-                        video_path = create_video_with_audio(
-                            image_clip=image_clip,
-                            audio_path=entry.audio_path,
-                            output_dir=BASE_DIRECTORY_TT,
-                            head_video_path=entry.head_video_path if entry.head_video_path else None,
-                            tail_video_path=entry.tail_video_path if entry.tail_video_path else None
-                        )
+                    video_path = create_video_with_audio(
+                        image_clip=image_clip,
+                        audio_path=entry.audio_path,
+                        output_path=entry.output_video_path if entry.output_video_path else None,
+                        output_dir=BASE_DIRECTORY_TT if not entry.output_video_path else None,
+                        head_video_path=entry.head_video_path or None,
+                        tail_video_path=entry.tail_video_path or None
+                    )
                     
                     if video_path:
                         created_videos.append(video_path)
@@ -140,16 +130,16 @@ def process_video_entries(csv_path: str) -> List[str]:
         logger.error(f"Error loading entries from Excel: {str(e)}")
         return []
 
-# if __name__ == "__main__":
-#     csv_path = os.path.join(BASE_DIRECTORY_TT, "TimelessTales_Video_Tracker.xlsx")
-#     created_videos = process_video_entries(csv_path)
+if __name__ == "__main__":
+    csv_path = os.path.join(BASE_DIRECTORY_TT, "TEST_TimelessTales_Video_Tracker.xlsx")
+    created_videos = process_video_entries(csv_path)
     
-#     if created_videos:
-#         logger.info(f"Successfully created {len(created_videos)} videos")
-#         for video in created_videos:
-#             logger.info(f"Created: {video}")
-#     else:
-#         logger.error("No videos were created")
+    if created_videos:
+        logger.info(f"Successfully created {len(created_videos)} videos")
+        for video in created_videos:
+            logger.info(f"Created: {video}")
+    else:
+        logger.error("No videos were created")
 
 
 
@@ -309,19 +299,19 @@ def test_image_texts_overlay():
 
 
 
-# Uncomment to test
-if __name__ == "__main__":
+# # Uncomment to test
+# if __name__ == "__main__":
 
-    # Intro
-    # video_path = resolve_path(r"assets\intro\TT_INTRO.mp4")
-    # voice_path = resolve_path(r"assets\intro\Welcome_RU_TT.mp3")
-    # output_path = resolve_path(r"assets\intro\TT_INTRO_FINAL.mp4")
+#     # Intro
+#     video_path = resolve_path(r"assets\intro\TT_INTRO.mp4")
+#     voice_path = resolve_path(r"assets\intro\Intro_Audio_Output.mp3")
+#     output_path = resolve_path(r"assets\intro\TT_INTRO_FINAL.mp4")
     
-    # add_voice_to_video(video_path=video_path, voice_path=voice_path, output_path=output_path)
+#     add_voice_to_video(video_path=video_path, voice_path=voice_path, output_path=output_path)
 
-    # # Tail
-    # video_path = resolve_path(r"assets\tail\TT_TAIL.mp4")
-    # voice_path = resolve_path(r"assets\tail\Tail_RU_TT.mp3")
-    # output_path = resolve_path(r"assets\tail\TT_TAIL_FINAL.mp4")
+#     # Tail
+#     video_path = resolve_path(r"assets\tail\TT_TAIL.mp4")
+#     voice_path = resolve_path(r"assets\tail\Tail_RU_TT.mp3")
+#     output_path = resolve_path(r"assets\tail\TT_TAIL_FINAL.mp4")
     
-    # add_voice_to_video(video_path=video_path, voice_path=voice_path, output_path=output_path)
+#     add_voice_to_video(video_path=video_path, voice_path=voice_path, output_path=output_path)

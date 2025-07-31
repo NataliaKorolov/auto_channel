@@ -278,92 +278,6 @@ def add_texts_to_image(
         print(f"Error processing image: {e}")
         return None, ""
 
-def add_head_video(main_clip, head_video_path: str):
-    """
-    Prepends a head video to the beginning of the main clip.
-    
-    Args:
-        main_clip: The main video clip
-        head_video_path: Path to the video to prepend
-        
-    Returns:
-        A new clip with the head video prepended
-    """
-    if not head_video_path or not os.path.exists(head_video_path):
-        if head_video_path:
-            print(f"Warning: Head video not found: {head_video_path}")
-        return main_clip
-    
-    head_clip = None    
-    try:
-        # Load the head video
-        head_clip = VideoFileClip(head_video_path)
-        
-        # Ensure head video has the same dimensions as the main clip
-        if head_clip.size != main_clip.size:
-            print(f"Resizing head video from {head_clip.size} to {main_clip.size}")
-            head_clip = head_clip.resized(width=main_clip.w, height=main_clip.h)
-        
-        # Prepend the head clip to the main clip
-        result_clip = concatenate_videoclips([head_clip, main_clip], method="compose")
-        print(f"Successfully prepended head video: {head_video_path}")
-        
-        return result_clip
-        
-    except Exception as e:
-        print(f"Error prepending head video: {e}")
-        return main_clip
-    finally:
-        # Ensure proper cleanup even if an exception occurs
-        if head_clip is not None:
-            try:
-                head_clip.close()
-            except Exception as e:
-                print(f"Warning: Error closing head clip: {e}")
-
-
-def add_tail_video(main_clip, tail_video_path: str):
-    """
-    Appends a tail video to the end of the main clip.
-    
-    Args:
-        main_clip: The main video clip
-        tail_video_path: Path to the video to append
-        
-    Returns:
-        A new clip with the tail video appended
-    """
-    if not tail_video_path or not os.path.exists(tail_video_path):
-        if tail_video_path:
-            print(f"Warning: Tail video not found: {tail_video_path}")
-        return main_clip
-    
-    tail_clip = None    
-    try:
-        # Load the tail video
-        tail_clip = VideoFileClip(tail_video_path)
-        
-        # Ensure tail video has the same dimensions as the main clip
-        if tail_clip.size != main_clip.size:
-            print(f"Resizing tail video from {tail_clip.size} to {main_clip.size}")
-            tail_clip = tail_clip.resized(width=main_clip.w, height=main_clip.h)
-        
-        # Append the tail clip to the main clip
-        result_clip = concatenate_videoclips([main_clip, tail_clip], method="compose")
-        print(f"Successfully appended tail video: {tail_video_path}")
-        
-        return result_clip
-        
-    except Exception as e:
-        print(f"Error appending tail video: {e}")
-        return main_clip
-    finally:
-        # Ensure proper cleanup even if an exception occurs
-        if tail_clip is not None:
-            try:
-                tail_clip.close()
-            except Exception as e:
-                print(f"Warning: Error closing tail clip: {e}")
 
 def create_video_with_audio(
     image_clip: CompositeVideoClip, 
@@ -400,22 +314,52 @@ def create_video_with_audio(
         # Verify we have a valid image clip
         if image_clip is None:
             raise ValueError("Invalid image clip provided")
-            
+
+
+        if image_clip.size != size:
+            print(f"Resizing image clip from {image_clip.size} to {size}")
+            image_clip = image_clip.resized(width=size[0], height=size[1])
+
         # Set image duration to match audio
         image_clip = image_clip.with_duration(audio.duration)
         
         # Add audio to clip
         main_clip = image_clip.with_audio(audio)
-        
+        dump_clip_info(main_clip, "Main clip before head video")
+   
         # Add head video if provided
+        head_clip = None
         if head_video_path:
-            main_clip = add_head_video(main_clip, head_video_path)
-            
-        # Add tail video if provided
+            head_clip = prepare_video_clip(head_video_path, main_clip, "Head")
+        
+        # Add tail video if provided  
+        tail_clip = None
         if tail_video_path:
-            final_clip = add_tail_video(main_clip, tail_video_path)
+            tail_clip = prepare_video_clip(tail_video_path, main_clip, "Tail")
+        
+        # Now you can concatenate using the prepared clips
+        clips_to_concatenate = []
+        
+        if head_clip:
+            clips_to_concatenate.append(head_clip)
+            
+        clips_to_concatenate.append(main_clip)
+        
+        if tail_clip:
+            clips_to_concatenate.append(tail_clip)
+        
+        # Final concatenation
+        if len(clips_to_concatenate) > 1:
+            final_clip = concatenate_videoclips(clips_to_concatenate, method="compose")
         else:
             final_clip = main_clip
+        
+        # Final validation
+        dump_clip_info(final_clip, "Final clip before writing")
+        
+        # Validate final clip before writing
+        if final_clip is None:
+            raise ValueError("Final clip is None - video composition failed")
             
         # Generate output path
         if output_path:
@@ -427,15 +371,35 @@ def create_video_with_audio(
             output_filename = f"{Path(audio_path).stem}.mp4"
             output_path = os.path.join(output_dir, output_filename)
         
-        # Write video file with fps specified - REMOVED verbose and logger parameters
+        print(f"Writing video to: {output_path}")
+
+        # In your video processing code:
+        if head_clip and tail_clip:
+            all_clips = [main_clip, head_clip, tail_clip, final_clip]
+            all_names = ["Main", "Head", "Tail", "Final"]
+            compare_clips_info(all_clips, all_names)        
+        
+        # Write video file with fps specified - Updated for MoviePy 2.2.1
+        # YouTube-optimized export settings
         final_clip.write_videofile(
             output_path,
-            fps=24,
-            codec="libx264",
-            audio_codec="aac",
-            audio_fps=44100
+            fps=24,                    # Standard for YouTube
+            codec="libx264",           # ✅ YouTube preferred
+            audio_codec="aac",         # ✅ YouTube preferred
+            preset="medium",           # Better quality than "fast"
+            bitrate="8000k",          # 8 Mbps - good balance for 1080p
+            audio_bitrate="128k",     # Standard audio quality
+            temp_audiofile="temp-audio.m4a",
+            remove_temp=True,
+            ffmpeg_params=[
+                "-pix_fmt", "yuv420p",  # YouTube compatibility
+                "-movflags", "+faststart"  # Web optimization
+            ],
+            threads=4,                # Use multiple threads for faster processing
         )
+
         
+
         return output_path
 
     except Exception as e:
@@ -1181,3 +1145,422 @@ def add_voice_to_video(video_path: str, voice_path: str, output_path: str = None
         except:
             pass
         return None
+
+def dump_clip_info(clip, clip_name: str = "Clip") -> dict:
+    """
+    Dump comprehensive information about a MoviePy clip for debugging purposes.
+    
+    Args:
+        clip: MoviePy clip object (VideoClip, AudioClip, CompositeVideoClip, etc.)
+        clip_name: Name/identifier for the clip (for logging purposes)
+        
+    Returns:
+        dict: Dictionary containing all available clip information
+    """
+    info = {
+        "clip_name": clip_name,
+        "clip_type": type(clip).__name__,
+        "is_none": clip is None
+    }
+    
+    if clip is None:
+        print(f"{clip_name}: CLIP IS NONE!")
+        return info
+    
+    try:
+        # Basic properties
+        info["has_duration"] = hasattr(clip, 'duration')
+        if hasattr(clip, 'duration'):
+            try:
+                info["duration"] = clip.duration
+                info["duration_valid"] = info["duration"] is not None and info["duration"] > 0
+            except Exception as e:
+                info["duration_error"] = str(e)
+        
+        # Video-specific properties
+        if hasattr(clip, 'size'):
+            try:
+                info["size"] = clip.size
+                info["width"] = clip.w if hasattr(clip, 'w') else None
+                info["height"] = clip.h if hasattr(clip, 'h') else None
+            except Exception as e:
+                info["size_error"] = str(e)
+        
+        if hasattr(clip, 'fps'):
+            try:
+                info["fps"] = clip.fps
+            except Exception as e:
+                info["fps_error"] = str(e)
+        
+        # Audio properties
+        if hasattr(clip, 'audio'):
+            try:
+                info["has_audio"] = clip.audio is not None
+                if clip.audio:
+                    info["audio_duration"] = getattr(clip.audio, 'duration', None)
+            except Exception as e:
+                info["audio_error"] = str(e)
+        
+        # Start and end times
+        if hasattr(clip, 'start'):
+            try:
+                info["start"] = clip.start
+            except Exception as e:
+                info["start_error"] = str(e)
+        
+        if hasattr(clip, 'end'):
+            try:
+                info["end"] = clip.end
+            except Exception as e:
+                info["end_error"] = str(e)
+        
+        # Mask information
+        if hasattr(clip, 'mask'):
+            try:
+                info["has_mask"] = clip.mask is not None
+            except Exception as e:
+                info["mask_error"] = str(e)
+        
+        # For CompositeVideoClip, get info about clips
+        if hasattr(clip, 'clips'):
+            try:
+                info["num_clips"] = len(clip.clips) if clip.clips else 0
+                info["clips_info"] = []
+                if clip.clips:
+                    for i, subclip in enumerate(clip.clips):
+                        subinfo = {
+                            "index": i,
+                            "type": type(subclip).__name__,
+                            "duration": getattr(subclip, 'duration', None),
+                            "size": getattr(subclip, 'size', None),
+                            "start": getattr(subclip, 'start', None)
+                        }
+                        info["clips_info"].append(subinfo)
+            except Exception as e:
+                info["clips_error"] = str(e)
+        
+        # Test if clip can generate frames
+        if hasattr(clip, 'get_frame'):
+            try:
+                test_frame = clip.get_frame(0)
+                info["can_get_frame"] = True
+                info["frame_shape"] = test_frame.shape if hasattr(test_frame, 'shape') else None
+            except Exception as e:
+                info["can_get_frame"] = False
+                info["get_frame_error"] = str(e)
+        
+        # Additional properties
+        if hasattr(clip, 'filename'):
+            info["filename"] = getattr(clip, 'filename', None)
+        
+        # Print summary
+        print(f"\n=== {clip_name} Information ===")
+        print(f"Type: {info['clip_type']}")
+        
+        if info.get('duration'):
+            print(f"Duration: {info['duration']:.2f}s")
+        elif 'duration_error' in info:
+            print(f"Duration Error: {info['duration_error']}")
+        
+        if info.get('size'):
+            print(f"Size: {info['size']} (W:{info.get('width')}, H:{info.get('height')})")
+        elif 'size_error' in info:
+            print(f"Size Error: {info['size_error']}")
+        
+        if info.get('fps'):
+            print(f"FPS: {info['fps']}")
+        
+        if 'has_audio' in info:
+            print(f"Has Audio: {info['has_audio']}")
+            if info.get('audio_duration'):
+                print(f"Audio Duration: {info['audio_duration']:.2f}s")
+        
+        if 'num_clips' in info:
+            print(f"Number of subclips: {info['num_clips']}")
+        
+        if 'can_get_frame' in info:
+            print(f"Can get frame: {info['can_get_frame']}")
+            if info.get('frame_shape'):
+                print(f"Frame shape: {info['frame_shape']}")
+            elif 'get_frame_error' in info:
+                print(f"Get frame error: {info['get_frame_error']}")
+        
+        # Print any errors
+        errors = [k for k in info.keys() if k.endswith('_error')]
+        if errors:
+            print("Errors found:")
+            for error_key in errors:
+                print(f"  {error_key}: {info[error_key]}")
+        
+        print("=" * (len(clip_name) + 20))
+        
+    except Exception as e:
+        info["general_error"] = str(e)
+        print(f"Error analyzing {clip_name}: {str(e)}")
+    
+    return info
+
+
+def prepare_video_clip(video_path: str, main_clip, clip_name: str = "Video") -> Optional[VideoFileClip]:
+    """
+    Load a video clip from path and adjust its parameters to match the main clip.
+    No concatenation is performed - just preparation.
+    
+    Args:
+        video_path: Path to the video file to load
+        main_clip: The reference clip to match parameters against
+        clip_name: Name for logging purposes
+        
+    Returns:
+        VideoFileClip: The prepared video clip with matching parameters, or None if failed
+    """
+    if not video_path or not os.path.exists(video_path):
+        if video_path:
+            print(f"Warning: {clip_name} video not found: {video_path}")
+        return None
+    
+    video_clip = None
+    try:
+        print(f"Loading {clip_name.lower()} video: {video_path}")
+        
+        # Load the video
+        video_clip = VideoFileClip(video_path)
+        
+        # Validate the clip can generate frames
+        try:
+            test_frame = video_clip.get_frame(0)
+            print(f"✅ {clip_name} video can generate frames: {test_frame.shape}")
+        except Exception as e:
+            print(f"❌ {clip_name} video cannot generate frames: {e}")
+            video_clip.close()
+            return None
+        
+        # Dump original clip info
+        dump_clip_info(video_clip, f"{clip_name} video (original)")
+        
+        # Adjust dimensions to match main clip
+        if video_clip.w != main_clip.w or video_clip.h != main_clip.h:
+            print(f"Resizing {clip_name.lower()} video from {video_clip.size} to {main_clip.size}")
+            video_clip = video_clip.resized(width=main_clip.w, height=main_clip.h)
+            
+            # Validate after resizing
+            try:
+                test_frame = video_clip.get_frame(0)
+                print(f"✅ {clip_name} video can generate frames after resize: {test_frame.shape}")
+            except Exception as e:
+                print(f"❌ {clip_name} video cannot generate frames after resize: {e}")
+                video_clip.close()
+                return None
+        else:
+            print(f"✅ {clip_name} video dimensions already match main clip")
+        
+        # Dump final clip info
+        dump_clip_info(video_clip, f"{clip_name} video (prepared)")
+        
+        print(f"✅ Successfully prepared {clip_name.lower()} video")
+        return video_clip
+        
+    except Exception as e:
+        print(f"❌ Error preparing {clip_name.lower()} video: {e}")
+        if video_clip:
+            video_clip.close()
+        return None
+    
+
+def compare_clips_info(clips: List, clip_names: List[str]) -> dict:
+    """
+    Compare comprehensive information between multiple MoviePy clips and highlight differences.
+    
+    Args:
+        clips: List of MoviePy clip objects to compare
+        clip_names: List of names/identifiers for the clips (must match length of clips)
+        
+    Returns:
+        dict: Dictionary containing comparison results and differences
+    """
+    
+    if len(clips) != len(clip_names):
+        raise ValueError(f"Number of clips ({len(clips)}) must match number of names ({len(clip_names)})")
+    
+    if len(clips) < 2:
+        raise ValueError("At least 2 clips are required for comparison")
+    
+    # Get info for all clips
+    all_info = []
+    for clip, name in zip(clips, clip_names):
+        info = dump_clip_info(clip, name)
+        all_info.append(info)
+    
+    comparison = {
+        "clip_names": clip_names,
+        "individual_info": all_info,
+        "differences": {},
+        "similarities": {},
+        "warnings": []
+    }
+    
+    # Define properties to compare
+    properties_to_compare = [
+        'clip_type', 'is_none', 'duration', 'duration_valid', 'size', 'width', 'height', 
+        'fps', 'has_audio', 'audio_duration', 'start', 'end', 'has_mask', 'num_clips',
+        'can_get_frame', 'frame_shape'
+    ]
+    
+    print(f"\n{'='*80}")
+    print(f"COMPARING {len(clips)} CLIPS: {' vs '.join(clip_names)}")
+    print(f"{'='*80}")
+    
+    for prop in properties_to_compare:
+        values = [info.get(prop) for info in all_info]
+        
+        # Check if all values are the same
+        if all(val == values[0] for val in values):
+            comparison["similarities"][prop] = values[0]
+        else:
+            comparison["differences"][prop] = dict(zip(clip_names, values))
+            
+            # Print differences
+            print(f"\n🔍 DIFFERENCE in {prop}:")
+            for name, val in zip(clip_names, values):
+                print(f"   {name}: {val}")
+    
+    # Special comparisons and warnings
+    print(f"\n{'='*50}")
+    print("DETAILED ANALYSIS")
+    print(f"{'='*50}")
+    
+    # Check for None clips
+    none_clips = [name for info, name in zip(all_info, clip_names) if info.get('is_none')]
+    if none_clips:
+        warning = f"⚠️  WARNING: These clips are None: {', '.join(none_clips)}"
+        comparison["warnings"].append(warning)
+        print(warning)
+    
+    # Duration comparison
+    durations = []
+    for info, name in zip(all_info, clip_names):
+        if info.get('duration') is not None:
+            durations.append((name, info['duration']))
+    
+    if len(durations) > 1:
+        print(f"\n📏 Duration Analysis:")
+        durations.sort(key=lambda x: x[1])
+        shortest = durations[0]
+        longest = durations[-1]
+        
+        print(f"   Shortest: {shortest[0]} = {shortest[1]:.2f}s")
+        print(f"   Longest:  {longest[0]} = {longest[1]:.2f}s")
+        
+        if longest[1] - shortest[1] > 0.1:  # More than 0.1 second difference
+            warning = f"Duration mismatch: {longest[1] - shortest[1]:.2f}s difference"
+            comparison["warnings"].append(warning)
+            print(f"   ⚠️  {warning}")
+        
+        # Show all durations if more than 3 clips
+        if len(durations) > 3:
+            print(f"   All durations:")
+            for name, duration in durations:
+                print(f"     {name}: {duration:.2f}s")
+    
+    # Size comparison
+    sizes = []
+    for info, name in zip(all_info, clip_names):
+        if info.get('size') is not None:
+            sizes.append((name, info['size']))
+    
+    
+    # Audio comparison
+    audio_info = []
+    for info, name in zip(all_info, clip_names):
+        has_audio = info.get('has_audio', False)
+        audio_duration = info.get('audio_duration')
+        audio_info.append((name, has_audio, audio_duration))
+    
+    print(f"\n🔊 Audio Analysis:")
+    for name, has_audio, audio_duration in audio_info:
+        if has_audio:
+            duration_str = f" ({audio_duration:.2f}s)" if audio_duration else " (unknown duration)"
+            print(f"   {name}: Has audio{duration_str}")
+        else:
+            print(f"   {name}: No audio")
+    
+    # Check for audio mismatches
+    audio_states = [info[1] for info in audio_info]  # has_audio values
+    if not all(state == audio_states[0] for state in audio_states):
+        warning = "Audio presence mismatch between clips"
+        comparison["warnings"].append(warning)
+        print(f"   ⚠️  {warning}")
+    
+    # Frame generation capability
+    frame_capabilities = []
+    for info, name in zip(all_info, clip_names):
+        can_get_frame = info.get('can_get_frame')
+        get_frame_error = info.get('get_frame_error')
+        frame_capabilities.append((name, can_get_frame, get_frame_error))
+    
+    print(f"\n🎬 Frame Generation Analysis:")
+    for name, can_get, error in frame_capabilities:
+        if can_get is True:
+            print(f"   {name}: ✅ Can generate frames")
+        elif can_get is False:
+            print(f"   {name}: ❌ Cannot generate frames - {error}")
+        else:
+            print(f"   {name}: ❓ Frame generation untested")
+    
+    # Check for frame generation issues
+    failed_clips = [name for name, can_get, _ in frame_capabilities if can_get is False]
+    if failed_clips:
+        warning = f"Frame generation failed for: {', '.join(failed_clips)}"
+        comparison["warnings"].append(warning)
+        print(f"   ⚠️  {warning}")
+    
+    # Composite clip analysis
+    composite_clips = []
+    for info, name in zip(all_info, clip_names):
+        if info.get('num_clips') is not None:
+            composite_clips.append((name, info['num_clips'], info.get('clips_info', [])))
+    
+    if composite_clips:
+        print(f"\n🎭 Composite Clip Analysis:")
+        for name, num_clips, clips_info in composite_clips:
+            print(f"   {name}: {num_clips} subclips")
+            if clips_info:
+                for i, subclip_info in enumerate(clips_info[:3]):  # Show first 3 subclips
+                    print(f"     [{i}] {subclip_info.get('type', 'Unknown')} - "
+                          f"Duration: {subclip_info.get('duration', 'N/A')}")
+                if len(clips_info) > 3:
+                    print(f"     ... and {len(clips_info) - 3} more subclips")
+    
+    # Error summary
+    all_errors = []
+    for info, name in zip(all_info, clip_names):
+        errors = [k for k in info.keys() if k.endswith('_error')]
+        if errors:
+            all_errors.extend([(name, k, info[k]) for k in errors])
+    
+    if all_errors:
+        print(f"\n❌ Error Summary:")
+        for name, error_type, error_msg in all_errors:
+            print(f"   {name} - {error_type}: {error_msg}")
+            comparison["warnings"].append(f"{name} has {error_type}: {error_msg}")
+    
+    # Final summary
+    print(f"\n{'='*50}")
+    print("COMPARISON SUMMARY")
+    print(f"{'='*50}")
+    print(f"Clips compared: {len(clips)}")
+    print(f"Properties compared: {len(properties_to_compare)}")
+    print(f"Similarities found: {len(comparison['similarities'])}")
+    print(f"Differences found: {len(comparison['differences'])}")
+    print(f"Warnings generated: {len(comparison['warnings'])}")
+    
+    if comparison['warnings']:
+        print(f"\n⚠️  CRITICAL ISSUES:")
+        for warning in comparison['warnings']:
+            print(f"   • {warning}")
+    else:
+        print(f"\n✅ No critical issues found!")
+    
+    print(f"{'='*80}")
+    
+    return comparison    
