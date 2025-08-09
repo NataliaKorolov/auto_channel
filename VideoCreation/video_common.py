@@ -411,27 +411,80 @@ def create_video_with_audio(
    
         # Prepare head and tail videos if provided
         if head_video_path:
+            print(f"🔍 DIAGNOSTIC: head_video_path provided: {head_video_path}")
             head_clip = prepare_video_clip(head_video_path, main_clip, "Head")
+            if head_clip:
+                print(f"✅ Head clip successfully prepared: duration={head_clip.duration:.2f}s, size={head_clip.size}")
+            else:
+                print(f"❌ Head clip preparation failed for: {head_video_path}")
             
         if tail_video_path:
+            print(f"🔍 DIAGNOSTIC: tail_video_path provided: {tail_video_path}")
+            print(f"🔍 DIAGNOSTIC: tail_video_path exists: {os.path.exists(tail_video_path) if tail_video_path else 'N/A'}")
+            if tail_video_path and os.path.exists(tail_video_path):
+                print(f"🔍 DIAGNOSTIC: tail video file size: {os.path.getsize(tail_video_path)} bytes")
+            
             tail_clip = prepare_video_clip(tail_video_path, main_clip, "Tail")
+            if tail_clip:
+                print(f"✅ Tail clip successfully prepared: duration={tail_clip.duration:.2f}s, size={tail_clip.size}")
+                
+                # Additional tail clip validation
+                try:
+                    test_frame = tail_clip.get_frame(0)
+                    print(f"✅ Tail clip can generate frames: {test_frame.shape}")
+                except Exception as frame_error:
+                    print(f"❌ Tail clip cannot generate frames: {frame_error}")
+                    tail_clip.close()
+                    tail_clip = None
+            else:
+                print(f"❌ Tail clip preparation failed for: {tail_video_path}")
+        else:
+            print(f"🔍 DIAGNOSTIC: No tail_video_path provided (value: {repr(tail_video_path)})")
         
-        # Build concatenation list
+        # Build concatenation list with detailed diagnostics
         clips_to_concatenate = []
+        
+        print(f"\n🔍 DIAGNOSTIC: Building concatenation list...")
         
         if head_clip:
             clips_to_concatenate.append(head_clip)
+            print(f"✅ Added head_clip to concatenation list (duration: {head_clip.duration:.2f}s)")
+        else:
+            print(f"⚠️ No head_clip to add (head_clip is {type(head_clip)})")
             
         clips_to_concatenate.append(main_clip)
+        print(f"✅ Added main_clip to concatenation list (duration: {main_clip.duration:.2f}s)")
         
         if tail_clip:
             clips_to_concatenate.append(tail_clip)
-        
-        # Final concatenation
-        if len(clips_to_concatenate) > 1:
-            print(f"Concatenating {len(clips_to_concatenate)} clips")
-            final_clip = concatenate_videoclips(clips_to_concatenate, method="compose")
+            print(f"✅ Added tail_clip to concatenation list (duration: {tail_clip.duration:.2f}s)")
         else:
+            print(f"⚠️ No tail_clip to add (tail_clip is {type(tail_clip)})")
+        
+        print(f"🔍 DIAGNOSTIC: Total clips for concatenation: {len(clips_to_concatenate)}")
+        
+        # Detailed concatenation diagnostics
+        if len(clips_to_concatenate) > 1:
+            print(f"🔄 Concatenating {len(clips_to_concatenate)} clips:")
+            for i, clip in enumerate(clips_to_concatenate):
+                clip_type = "head" if i == 0 and head_clip else ("tail" if i == len(clips_to_concatenate) - 1 and tail_clip else "main")
+                print(f"   Clip {i+1} ({clip_type}): duration={clip.duration:.2f}s, size={clip.size}")
+                
+                # Test each clip before concatenation
+                try:
+                    test_frame = clip.get_frame(0)
+                    print(f"   ✅ Clip {i+1} can generate frames")
+                except Exception as e:
+                    print(f"   ❌ Clip {i+1} CANNOT generate frames: {e}")
+                    
+            final_clip = concatenate_videoclips(clips_to_concatenate, method="compose")
+            
+            if final_clip:
+                print(f"✅ Concatenation successful: final duration={final_clip.duration:.2f}s")
+            else:
+                print(f"❌ Concatenation failed: final_clip is None")
+        else:
+            print(f"ℹ️ Only one clip available, using main_clip directly")
             final_clip = main_clip
 
         if final_clip is None:
