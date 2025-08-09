@@ -447,24 +447,27 @@ def create_video_with_audio(
         print(f"Writing video to: {output_path}")
           
         # Write video file with optimized settings
+        # Use lower bitrate, fastest preset, and disable logging for speed.
+        # You can further speed up by reducing resolution, using fewer threads, or using a faster codec.
         final_clip.write_videofile(
             output_path,
             fps=24,
             codec="libx264",
             audio_codec="aac",
-            preset="ultrafast",        # 🚀 FASTEST preset (was "medium")
-            bitrate="3000k",          # 🚀 LOWER bitrate (was "8000k") 
-            audio_bitrate="64k",      # 🚀 LOWER audio quality (was "128k")
+            preset="ultrafast",        # Fastest preset for speed
+            bitrate="1000k",           # Reasonable low bitrate for speed/quality
+            audio_bitrate="64k",       # Lower audio quality for speed
             temp_audiofile="temp-audio.m4a",
             remove_temp=True,
-             ffmpeg_params=[
-                "-pix_fmt", "yuv420p",
-                "-movflags", "+faststart",
-                "-crf", "28",             # 🚀 HIGHER compression = faster
-                "-tune", "fastdecode"     # 🚀 OPTIMIZE for speed
+            ffmpeg_params=[
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            "-crf", "28",           # Higher compression for speed
+            "-tune", "fastdecode"   # Optimize for speed
             ],
-            threads=4,
-            logger=None               # 🚀 DISABLE verbose logging
+            threads=2,                 # 2 threads is safe for Colab
+            logger="bar"                # Disable verbose logging for Colab
+        )
         )
 
         print(f"Successfully created video: {output_path}")

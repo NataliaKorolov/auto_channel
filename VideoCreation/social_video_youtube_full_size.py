@@ -1,8 +1,10 @@
-import os
 from video_common import CreateAudioFile, CreateVideoFile, ConcatenateAudioFiles, ConcatenateVideoFiles, BASE_DIRECTORY
+import os
 
 # === CONFIGURATION ===
 BASE_DIRECTORY_GREECE = os.path.join(BASE_DIRECTORY, "Greece_Automation")
+
+BASE_DIRECTORY_GREECE_CURRENT = os.path.join(BASE_DIRECTORY_GREECE, "3_Hector") # Change "3_Hector" to your current workflow folder name
 
 BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS = os.path.join(BASE_DIRECTORY_GREECE, "Common_Artifacts")
 
@@ -28,37 +30,38 @@ TAIL_AUDIO_OUTPUT_FILE_EN = os.path.join(TAIL_BASE_DIRECTORY_GREECE_COMMON_ARTIF
 TAIL_AUDIO_OUTPUT_FILE_RU = os.path.join(TAIL_BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS, "Tail_Audio_Output_RU.mp3")
 TAIL_MUSIC_OVERLAY_PATH = os.path.join(TAIL_BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS, "Tail_Music.mp3")
 TAIL_TEXT_AUDIO_OVERLAY_PATH_EN = os.path.join(TAIL_BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS, "Tail_EN_TG.mp3")
-TAIL_TEXT_AUDIO_OVERLAY_PATH_RU = os.path.join(TAIL_BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS, "Tail_RU_TG.mp3")   
+TAIL_TEXT_AUDIO_OVERLAY_PATH_RU = os.path.join(TAIL_BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS, "Tail_RU_TG.mp3")
 TAIL_TEXT_OVERLAY_CSV_PATH = os.path.join(TAIL_BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS, "Tail_Text_Overlay_EN_RU.csv")
 TAIL_VIDEO_PATHS = [os.path.join(TAIL_BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS, f"Tail_{i}.mp4") for i in range(1, 3)]
 
-BASE_DIRECTORY_GREECE_CURRENT = os.path.join(BASE_DIRECTORY_GREECE, "TragicBraveryHector")
-VIDEO_PATHS = [os.path.join(BASE_DIRECTORY_GREECE_CURRENT, f"prompt {i}.mp4") for i in range(1, 11)]
-AUDIO_PATH_RU = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "Voice_Over_RU.mp3")
-AUDIO_PATH_EN = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "Voice_Over_EN.mp3")
+BASE_DIRECTORY_GREECE_CURRENT_ARTIFACTS = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "Artifacts")
+VIDEO_PATHS = [os.path.join(BASE_DIRECTORY_GREECE_CURRENT_ARTIFACTS, f"Prompt {i}.mp4") for i in range(1, 11)]
+AUDIO_PATH_RU = os.path.join(BASE_DIRECTORY_GREECE_CURRENT_ARTIFACTS, "Voice_Over_RU.mp3")
+AUDIO_PATH_EN = os.path.join(BASE_DIRECTORY_GREECE_CURRENT_ARTIFACTS, "Voice_Over_EN.mp3")
+CSV_PATH = os.path.join(BASE_DIRECTORY_GREECE_CURRENT_ARTIFACTS, "Video_Texts.csv")
 
-AUDIO_PATH_WITH_TAIL_RU = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "Voice_Over_RU_With_Tail.mp3")
-AUDIO_PATH_WITH_TAIL_EN = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "Voice_Over_EN_With_Tail.mp3")
+BASE_DIRECTORY_GREECE_CURRENT_RESULT = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "Result_Automation")
 
-CSV_PATH = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "Video_Texts.csv")
+AUDIO_PATH_WITH_TAIL_RU = os.path.join(BASE_DIRECTORY_GREECE_CURRENT_RESULT, "Voice_Over_RU_With_Tail.mp3")
+AUDIO_PATH_WITH_TAIL_EN = os.path.join(BASE_DIRECTORY_GREECE_CURRENT_RESULT, "Voice_Over_EN_With_Tail.mp3")
+VIDEO_EN_HORIZONTAL_MAIN_PLUS_TAIL = os.path.join(BASE_DIRECTORY_GREECE_CURRENT_RESULT, "main_plus_tail_horizontal_1920x1080_EN.mp4")
+VIDEO_RU_HORIZONTAL_MAIN_PLUS_TAIL = os.path.join(BASE_DIRECTORY_GREECE_CURRENT_RESULT, "main_plus_tail_horizontal_1920x1080_RU.mp4")
+VIDEO_EN_VERTICAL_MAIN_PLUS_TAIL = os.path.join(BASE_DIRECTORY_GREECE_CURRENT_RESULT, "main_plus_tail_vertical_1080x1920_EN.mp4")
+VIDEO_RU_VERTICAL_MAIN_PLUS_TAIL = os.path.join(BASE_DIRECTORY_GREECE_CURRENT_RESULT, "main_plus_tail_vertical_1080x1920_RU.mp4")
 
-VIDEO_EN_HORIZONTAL_MAIN_PLUS_TAIL = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "main_plus_tail_horizontal_1920x1080_EN.mp4")
-VIDEO_RU_HORIZONTAL_MAIN_PLUS_TAIL = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "main_plus_tail_horizontal_1920x1080_RU.mp4")
-VIDEO_EN_VERTICAL_MAIN_PLUS_TAIL = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "main_plus_tail_vertical_1080x1920_EN.mp4")
-VIDEO_RU_VERTICAL_MAIN_PLUS_TAIL = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "main_plus_tail_vertical_1080x1920_RU.mp4")
+BASE_DIRECTORY_GREECE_CURRENT_FINAL = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "Final")
 
-FINAL_VIDEO_EN_HORIZONTAL = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "final_horizontal_1920x1080_EN.mp4")
-FINAL_VIDEO_RU_HORIZONTAL = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "final_horizontal_1920x1080_RU.mp4")
-FINAL_VIDEO_EN_VERTICAL = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "final_vertical_1080x1920_EN.mp4")
-FINAL_VIDEO_RU_VERTICAL = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "final_vertical_1080x1920_RU.mp4")
-
+FINAL_VIDEO_EN_HORIZONTAL = os.path.join(BASE_DIRECTORY_GREECE_CURRENT_FINAL, "final_horizontal_1920x1080_EN.mp4")
+FINAL_VIDEO_RU_HORIZONTAL = os.path.join(BASE_DIRECTORY_GREECE_CURRENT_FINAL, "final_horizontal_1920x1080_RU.mp4")
+FINAL_VIDEO_EN_VERTICAL = os.path.join(BASE_DIRECTORY_GREECE_CURRENT_FINAL, "final_vertical_1080x1920_EN.mp4")
+FINAL_VIDEO_RU_VERTICAL = os.path.join(BASE_DIRECTORY_GREECE_CURRENT_FINAL, "final_vertical_1080x1920_RU.mp4")
 
 # FONT_PATH = os.path.join(BASE_DIRECTORY_GREECE_CURRENT, "Cinzel-Regular.ttf")  # Update if needed
 
 DEFAULT_FONT = "DejaVuSans"  # Safe fallback font
 
 
-def create_complete_video_for_greece(language: str, orientation: str, cleanup_intermediate: bool = False):
+def create_complete_video_for_greece(language: str, orientation: str, cleanup_intermediate: bool = False, build_all: bool = True):
     """
     Creates a complete video with intro, main content, and tail for the specified language and orientation.
     
@@ -66,6 +69,7 @@ def create_complete_video_for_greece(language: str, orientation: str, cleanup_in
         language: Language code ("EN" or "RU")
         orientation: Video orientation ("horizontal" or "vertical")
         cleanup_intermediate: Whether to clean up intermediate files to save storage
+        build_all: If False, skips intro/tail creation and uses existing files
         
     Returns:
         str: Path to final video if successful, None if failed
@@ -118,73 +122,93 @@ def create_complete_video_for_greece(language: str, orientation: str, cleanup_in
         # Add video intermediate files to tracking list
         intermediate_files.extend([intro_video, main_tail_video])
         
-        # Step 1: Create intro audio
-        print(f"Step 1/6: 🎵 Creating intro audio...")
-        try:
-            CreateAudioFile(
-                output_file=intro_audio,
-                music_overlay_path=INTRO_MUSIC_OVERLAY_PATH,
-                text_audio_overlay_path=intro_text_audio,
-                set_duration_by_text_audio=True,
-                time_of_music_before_voice=0.2,
-                time_of_music_after_voice=1.5
-            )
+        if build_all:
+            # Step 1: Create intro audio
+            print(f"Step 1/6: 🎵 Creating intro audio...")
+            try:
+                CreateAudioFile(
+                    output_file=intro_audio,
+                    music_overlay_path=INTRO_MUSIC_OVERLAY_PATH,
+                    text_audio_overlay_path=intro_text_audio,
+                    set_duration_by_text_audio=True,
+                    time_of_music_before_voice=0.2,
+                    time_of_music_after_voice=1.5
+                )
+                
+                # Validate file was created
+                if not os.path.exists(intro_audio):
+                    raise FileNotFoundError(f"Failed to create intro audio: {intro_audio}")
+                    
+                print(f"✅ Step 1 completed: {os.path.basename(intro_audio)}")
+                
+            except Exception as e:
+                print(f"❌ Step 1 failed: {e}")
+                raise RuntimeError(f"Intro audio creation failed: {e}")
             
-            # Validate file was created
+            # Step 2: Create intro video
+            print(f"Step 2/6: 🎬 Creating intro video...")
+            try:
+                CreateVideoFile(
+                    output_file=intro_video,
+                    size=size,
+                    resize_dim=resize_dim,
+                    audio_path=intro_audio,
+                    csv_path=INTRO_TEXT_OVERLAY_CSV_PATH,
+                    text_column=text_column,
+                    video_paths=INTRO_VIDEO_PATHS,
+                    use_audio_duration=False
+                )
+                
+                # Validate file was created
+                if not os.path.exists(intro_video):
+                    raise FileNotFoundError(f"Failed to create intro video: {intro_video}")
+                    
+                print(f"✅ Step 2 completed: {os.path.basename(intro_video)}")
+                
+            except Exception as e:
+                print(f"❌ Step 2 failed: {e}")
+                raise RuntimeError(f"Intro video creation failed: {e}")
+            
+            # Step 3: Create tail audio
+            print(f"Step 3/6: 🎵 Creating tail audio...")
+            try:
+                CreateAudioFile(
+                    output_file=tail_audio,
+                    music_overlay_path=TAIL_MUSIC_OVERLAY_PATH,
+                    text_audio_overlay_path=tail_text_audio,
+                    set_duration_by_text_audio=True,
+                    time_of_music_before_voice=2,
+                    time_of_music_after_voice=2
+                )
+                
+                # Validate file was created
+                if not os.path.exists(tail_audio):
+                    raise FileNotFoundError(f"Failed to create tail audio: {tail_audio}")
+                    
+                print(f"✅ Step 3 completed: {os.path.basename(tail_audio)}")
+                
+            except Exception as e:
+                print(f"❌ Step 3 failed: {e}")
+                raise RuntimeError(f"Tail audio creation failed: {e}")
+        else:
+            # Skip first three steps - verify existing files
+            print("⏸️ Skipping steps 1-3 (build_all=False). Checking for existing files...")
+            
+            missing_files = []
             if not os.path.exists(intro_audio):
-                raise FileNotFoundError(f"Failed to create intro audio: {intro_audio}")
-                
-            print(f"✅ Step 1 completed: {os.path.basename(intro_audio)}")
-            
-        except Exception as e:
-            print(f"❌ Step 1 failed: {e}")
-            raise RuntimeError(f"Intro audio creation failed: {e}")
-        
-        # Step 2: Create intro video
-        print(f"Step 2/6: 🎬 Creating intro video...")
-        try:
-            CreateVideoFile(
-                output_file=intro_video,
-                size=size,
-                resize_dim=resize_dim,
-                audio_path=intro_audio,
-                csv_path=INTRO_TEXT_OVERLAY_CSV_PATH,
-                text_column=text_column,
-                video_paths=INTRO_VIDEO_PATHS,
-                use_audio_duration=False
-            )
-            
-            # Validate file was created
+                missing_files.append(f"Intro audio: {intro_audio}")
             if not os.path.exists(intro_video):
-                raise FileNotFoundError(f"Failed to create intro video: {intro_video}")
-                
-            print(f"✅ Step 2 completed: {os.path.basename(intro_video)}")
-            
-        except Exception as e:
-            print(f"❌ Step 2 failed: {e}")
-            raise RuntimeError(f"Intro video creation failed: {e}")
-        
-        # Step 3: Create tail audio
-        print(f"Step 3/6: 🎵 Creating tail audio...")
-        try:
-            CreateAudioFile(
-                output_file=tail_audio,
-                music_overlay_path=TAIL_MUSIC_OVERLAY_PATH,
-                text_audio_overlay_path=tail_text_audio,
-                set_duration_by_text_audio=True,
-                time_of_music_before_voice=2,
-                time_of_music_after_voice=2
-            )
-            
-            # Validate file was created
+                missing_files.append(f"Intro video: {intro_video}")
             if not os.path.exists(tail_audio):
-                raise FileNotFoundError(f"Failed to create tail audio: {tail_audio}")
+                missing_files.append(f"Tail audio: {tail_audio}")
                 
-            print(f"✅ Step 3 completed: {os.path.basename(tail_audio)}")
-            
-        except Exception as e:
-            print(f"❌ Step 3 failed: {e}")
-            raise RuntimeError(f"Tail audio creation failed: {e}")
+            if missing_files:
+                print("❌ Missing required files:")
+                for missing in missing_files:
+                    print(f"   - {missing}")
+                raise FileNotFoundError("Cannot proceed without existing intro/tail files when build_all=False")
+            else:
+                print("✅ All required intro/tail files found")
         
         # Step 4: Combine main and tail audio
         print(f"Step 4/6: 🔗 Combining main and tail audio...")
@@ -284,16 +308,64 @@ def create_complete_video_for_greece(language: str, orientation: str, cleanup_in
         
         return None
 
+def check_greece_workflow_directories():
+    """Check if all required Greece workflow directories exist."""
+    greece_dirs_missing = []
 
+    # Use the already defined directory variables
+    required_greece_dirs = [
+        BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS,
+        INTRO_BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS,
+        TAIL_BASE_DIRECTORY_GREECE_COMMON_ARTIFACTS,
+        BASE_DIRECTORY_GREECE_CURRENT_ARTIFACTS,
+        BASE_DIRECTORY_GREECE_CURRENT_RESULT,
+        BASE_DIRECTORY_GREECE_CURRENT_FINAL
+    ]
+
+    for dir_path in required_greece_dirs:
+        if not os.path.exists(dir_path):
+            # Make path relative to BASE_DIRECTORY for cleaner display
+            friendly_name = dir_path.replace(BASE_DIRECTORY, "Files for SocialVideoBot")
+            greece_dirs_missing.append(friendly_name)
+
+    if greece_dirs_missing:
+        print("⚠️  GREECE WORKFLOW DIRECTORIES MISSING!")
+        print("📁 Please create these folders:")
+        for missing_dir in greece_dirs_missing:
+            print(f"   📂 {missing_dir}")
+
+        print("\n💡 Required folder structure for Greece workflow:")
+        print("Files for SocialVideoBot/Greece_Automation/")
+        print("  ├── Common_Artifacts/")
+        print("  │   ├── Intro/")
+        print("  │   └── Tail/")
+        print("  └── 3_Hector/")
+        print("      ├── Artifacts/")
+        print("      ├── Result_Automation/")
+        print("      └── Final/")
+
+        print("\n❌ Cannot run Greece workflow without required directories.")
+        print("🔄 Please create the folder structure above and re-run this script.")
+        return False
+    else:
+        print("✅ All Greece workflow directories found!")
+        print("🎬 Starting Greece workflow...")
+        return True
 
 if __name__ == "__main__":
-    # Create all four video variants
-    # create_complete_video_for_greece(language="EN", orientation="horizontal", cleanup_intermediate=False) 
-    create_complete_video_for_greece(language="RU", orientation="horizontal", cleanup_intermediate=False) 
-    # create_complete_video_for_greece(language="EN", orientation="vertical", cleanup_intermediate=False) 
-    # create_complete_video_for_greece(language="RU", orientation="vertical", cleanup_intermediate=False) 
+    # Check directories before running workflow
+    if check_greece_workflow_directories():
+        build_all = True 
+        # Create all four video variants
+        # create_complete_video_for_greece(language="EN", orientation="horizontal", cleanup_intermediate=False, build_all=build_all) 
+        create_complete_video_for_greece(language="RU", orientation="horizontal", cleanup_intermediate=False, build_all=build_all) 
+        # create_complete_video_for_greece(language="EN", orientation="vertical", cleanup_intermediate=False, build_all=build_all) 
+        # create_complete_video_for_greece(language="RU", orientation="vertical", cleanup_intermediate=False, build_all=build_all) 
 
-    # Or selectively create only specific variants:
-    # create_complete_video(language="EN", orientation="horizontal")
-    # Set cleanup_intermediateto True to save storage in Colab
+        # Or selectively create only specific variants:
+        # create_complete_video_for_greece(language="EN", orientation="horizontal", build_all=build_all)
+        # Set cleanup_intermediate to True to save storage
+
+    else:
+        print("⏸️  Greece workflow stopped due to missing directories.")
 
