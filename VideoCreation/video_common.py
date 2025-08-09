@@ -422,7 +422,6 @@ def create_video_with_audio(
    
         # Prepare head and tail videos if provided
         if head_video_path:
-            print(f"🔍 DIAGNOSTIC: head_video_path provided: {head_video_path}")
             head_clip = prepare_video_clip(head_video_path, main_clip, "Head")
             if head_clip:
                 print(f"✅ Head clip successfully prepared: duration={head_clip.duration:.2f}s, size={head_clip.size}")
@@ -430,10 +429,8 @@ def create_video_with_audio(
                 print(f"❌ Head clip preparation failed for: {head_video_path}")
             
         if tail_video_path:
-            print(f"🔍 DIAGNOSTIC: tail_video_path provided: {tail_video_path}")
-            print(f"🔍 DIAGNOSTIC: tail_video_path exists: {os.path.exists(tail_video_path) if tail_video_path else 'N/A'}")
             if tail_video_path and os.path.exists(tail_video_path):
-                print(f"🔍 DIAGNOSTIC: tail video file size: {os.path.getsize(tail_video_path)} bytes")
+                print(f"Tail video file size: {os.path.getsize(tail_video_path)} bytes")
             
             tail_clip = prepare_video_clip(tail_video_path, main_clip, "Tail")
             if tail_clip:
@@ -449,19 +446,13 @@ def create_video_with_audio(
                     tail_clip = None
             else:
                 print(f"❌ Tail clip preparation failed for: {tail_video_path}")
-        else:
-            print(f"🔍 DIAGNOSTIC: No tail_video_path provided (value: {repr(tail_video_path)})")
         
-        # Build concatenation list with detailed diagnostics
+        # Build concatenation list
         clips_to_concatenate = []
-        
-        print(f"\n🔍 DIAGNOSTIC: Building concatenation list...")
         
         if head_clip:
             clips_to_concatenate.append(head_clip)
             print(f"✅ Added head_clip to concatenation list (duration: {head_clip.duration:.2f}s)")
-        else:
-            print(f"⚠️ No head_clip to add (head_clip is {type(head_clip)})")
             
         clips_to_concatenate.append(main_clip)
         print(f"✅ Added main_clip to concatenation list (duration: {main_clip.duration:.2f}s)")
@@ -469,12 +460,8 @@ def create_video_with_audio(
         if tail_clip:
             clips_to_concatenate.append(tail_clip)
             print(f"✅ Added tail_clip to concatenation list (duration: {tail_clip.duration:.2f}s)")
-        else:
-            print(f"⚠️ No tail_clip to add (tail_clip is {type(tail_clip)})")
         
-        print(f"🔍 DIAGNOSTIC: Total clips for concatenation: {len(clips_to_concatenate)}")
-        
-        # Detailed concatenation diagnostics
+        # Concatenate clips
         if len(clips_to_concatenate) > 1:
             print(f"🔄 Concatenating {len(clips_to_concatenate)} clips:")
             for i, clip in enumerate(clips_to_concatenate):
@@ -513,18 +500,18 @@ def create_video_with_audio(
         # 🚀 OPTIMIZED VIDEO SETTINGS for static image content
         final_clip.write_videofile(
             output_path,
-            fps=12,                    # 🚀 REDUCED FPS: 12 instead of 24 for static images
+            fps=8,                     # Very low frame rate                   # 🚀 REDUCED FPS: 12 instead of 24 for static images
             codec="libx264",
             audio_codec="aac",
             preset="ultrafast",        
-            bitrate="500k",            # 🚀 MUCH LOWER bitrate: 500k instead of 1000k for static content
-            audio_bitrate="32k",       # 🚀 LOWER audio quality: 32k instead of 64k
+            bitrate="250k",            # Even lower bitrate # 🚀 MUCH LOWER bitrate: 500k instead of 1000k for static content
+            audio_bitrate="24k",       # Minimal audio quality# 🚀 LOWER audio quality: 32k instead of 64k
             temp_audiofile="temp-audio.m4a",
             remove_temp=True,
             ffmpeg_params=[
                 "-pix_fmt", "yuv420p",
                 "-movflags", "+faststart",
-                "-crf", "32",          # 🚀 HIGHER compression: 32 instead of 28 (lower quality but much smaller)
+                "-crf", "35",              # Higher compression (lower quality)          # 🚀 HIGHER compression: 32 instead of 28 (lower quality but much smaller)
                 "-tune", "stillimage", # 🚀 OPTIMIZE for static images
                 "-g", "250",           # 🚀 LARGER keyframe interval for static content
                 "-keyint_min", "25",   # 🚀 MINIMUM keyframe interval
@@ -568,7 +555,7 @@ def create_video_with_audio(
                     clip.close()
                 except Exception as cleanup_error:
                     print(f"Warning: Error closing {name}: {cleanup_error}")
-
+                    
 
 def CreateAudioFile(
     output_file: str, 
