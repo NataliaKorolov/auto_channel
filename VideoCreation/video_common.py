@@ -13,6 +13,7 @@ from PIL import Image
 import re  # Add this import at the top with other imports
 import cv2  # Add for GetVideoInfo function
 import traceback
+from datetime import datetime
 
 # Base directory constants
 BASE_DIRECTORY = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot"
@@ -521,7 +522,7 @@ def create_video_with_audio(
             threads=2,                 # 2 threads is safe for Colab
             logger="bar"                # Disable verbose logging for Colab
         )
-        )
+        
 
         print(f"Successfully created video: {output_path}")
         return output_path
