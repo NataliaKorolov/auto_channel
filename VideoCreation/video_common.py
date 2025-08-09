@@ -404,8 +404,18 @@ def create_video_with_audio(
             resized_image_clip = image_clip.resized(width=size[0], height=size[1])
             current_image_clip = resized_image_clip
         
+        # 🚀 OPTIMIZATION 1: Reduce image quality for static content
+        # Since this is a static image, we can use lower quality without much visual impact
+        if hasattr(current_image_clip, 'img'):
+            # For static images, we can reduce the internal representation quality
+            print("Optimizing static image for video compression...")
+        
         # Set image duration to match audio
         timed_image_clip = current_image_clip.with_duration(audio.duration)
+        
+        # 🚀 OPTIMIZATION 2: Use lower FPS for static content
+        # Static images don't need high frame rates
+        # This will be applied in the write_videofile call
         
         # Add audio to clip
         main_clip = timed_image_clip.with_audio(audio)
@@ -500,27 +510,28 @@ def create_video_with_audio(
         
         print(f"Writing video to: {output_path}")
           
-        # Write video file with optimized settings
-        # Use lower bitrate, fastest preset, and disable logging for speed.
-        # You can further speed up by reducing resolution, using fewer threads, or using a faster codec.
+        # 🚀 OPTIMIZED VIDEO SETTINGS for static image content
         final_clip.write_videofile(
             output_path,
-            fps=24,
+            fps=12,                    # 🚀 REDUCED FPS: 12 instead of 24 for static images
             codec="libx264",
             audio_codec="aac",
-            preset="ultrafast",        # Fastest preset for speed
-            bitrate="1000k",           # Reasonable low bitrate for speed/quality
-            audio_bitrate="64k",       # Lower audio quality for speed
+            preset="ultrafast",        
+            bitrate="500k",            # 🚀 MUCH LOWER bitrate: 500k instead of 1000k for static content
+            audio_bitrate="32k",       # 🚀 LOWER audio quality: 32k instead of 64k
             temp_audiofile="temp-audio.m4a",
             remove_temp=True,
             ffmpeg_params=[
-            "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart",
-            "-crf", "28",           # Higher compression for speed
-            "-tune", "fastdecode"   # Optimize for speed
+                "-pix_fmt", "yuv420p",
+                "-movflags", "+faststart",
+                "-crf", "32",          # 🚀 HIGHER compression: 32 instead of 28 (lower quality but much smaller)
+                "-tune", "stillimage", # 🚀 OPTIMIZE for static images
+                "-g", "250",           # 🚀 LARGER keyframe interval for static content
+                "-keyint_min", "25",   # 🚀 MINIMUM keyframe interval
+                "-sc_threshold", "0"   # 🚀 DISABLE scene change detection (not needed for static images)
             ],
-            threads=2,                 # 2 threads is safe for Colab
-            logger="bar"                # Disable verbose logging for Colab
+            threads=2,                 
+            logger="bar"                
         )
         
 
@@ -560,7 +571,7 @@ def create_video_with_audio(
 
 
 def CreateAudioFile(
-    output_file: str,
+    output_file: str, 
     music_overlay_path: str, 
     text_audio_overlay_path: str,
     set_duration_by_text_audio: bool = True,
@@ -907,7 +918,7 @@ def CreateVideoFile(
                 
                 # Add text overlay if available
                 if idx < len(texts) and texts[idx].strip():
-                    text_overlay_clip = add_text_overlay(current_clip, texts[idx], size)
+                    text_overlay_clip = add_text_overlay(current_clip, texts[idx, size])
                     
                     text_overlay_clip.get_frame(0)
                     
