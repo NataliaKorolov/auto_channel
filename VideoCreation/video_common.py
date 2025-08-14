@@ -490,7 +490,7 @@ def create_video_with_audio(
                     "-color_trc", "bt709"
                 ],
                 threads=4,
-                logger="bar"
+                logger=None
             )
             
             # Build final concatenation list
@@ -886,6 +886,7 @@ def add_texts_to_image(
 
         # Load image
         img = Image.open(image_path)
+        print(f"📐 Image dimensions: {img.width}x{img.height}")
         
         # Create base clip
         base_clip = ImageClip(image_path)
@@ -894,6 +895,9 @@ def add_texts_to_image(
         # Add each text overlay
         for i, overlay in enumerate(text_overlays):
             try:
+                # 🚀 IMPROVED: Dynamic text width based on image size
+                max_text_width = int(img.width * 0.9)  # 90% of image width
+                
                 txt_clip = TextClip(
                     text=overlay.text,
                     font=overlay.style.font,
@@ -902,22 +906,44 @@ def add_texts_to_image(
                     stroke_color=overlay.style.stroke_color,
                     stroke_width=overlay.style.stroke_width,
                     method='caption',
-                    size=(int(img.width * 0.8), None),  # limit width to 80% of image
+                    size=(max_text_width, None),  # Let height be calculated automatically
                     text_align="center",
                     margin=(10, 10, 10, 10)
                 )
                 
                 text_clips.append(txt_clip)  # Track for cleanup
-
-                # Calculate position with extra spacing
+                
+                print(f"📝 Text {i+1}: '{overlay.text[:30]}...' - Size: {txt_clip.w}x{txt_clip.h}")
+                
+                # 🚀 FIXED: Improved position calculation with boundary checking
+                # Calculate base positions
                 x_pos = int((img.width * overlay.horizontal_offset) / 100) - txt_clip.w // 2
-                y_pos = int(img.height * (100 - overlay.vertical_offset) / 100) - txt_clip.h - 20
+                y_pos = int(img.height * (100 - overlay.vertical_offset) / 100) - txt_clip.h // 2
+                
+                # 🚀 BOUNDARY CHECKING: Ensure text stays within image bounds
+                # Check horizontal boundaries
+                if x_pos < 0:
+                    x_pos = 10  # 10px margin from left
+                    print(f"⚠️ Text {i+1}: Adjusted X position to stay within bounds")
+                elif x_pos + txt_clip.w > img.width:
+                    x_pos = img.width - txt_clip.w - 10  # 10px margin from right
+                    print(f"⚠️ Text {i+1}: Adjusted X position to stay within bounds")
+                
+                # Check vertical boundaries
+                if y_pos < 0:
+                    y_pos = 10  # 10px margin from top
+                    print(f"⚠️ Text {i+1}: Adjusted Y position to stay within bounds (was too high)")
+                elif y_pos + txt_clip.h > img.height:
+                    y_pos = img.height - txt_clip.h - 10  # 10px margin from bottom
+                    print(f"⚠️ Text {i+1}: Adjusted Y position to stay within bounds (was too low)")
+                
+                print(f"📍 Text {i+1} position: ({x_pos}, {y_pos}) - Bounds check: OK")
                 
                 positioned_clip = txt_clip.with_position((x_pos, y_pos))
                 clips.append(positioned_clip)
                 
             except Exception as e:
-                print(f"Error creating text overlay {i}: {e}")
+                print(f"❌ Error creating text overlay {i}: {e}")
                 continue
         
         # Create composite
@@ -927,16 +953,16 @@ def add_texts_to_image(
         if write_image_as_file and result:
             try:
                 result.save_frame(output_path)
-                print(f"Saved image with overlays to: {output_path}")
+                print(f"💾 Saved image with overlays to: {output_path}")
             except Exception as e:
-                print(f"Error saving image: {e}")
+                print(f"❌ Error saving image: {e}")
                 output_path = ""
         
-        print(f"Successfully created composite with {len(text_clips)} text overlays")
+        print(f"✅ Successfully created composite with {len(text_clips)} text overlays")
         return result, output_path
 
     except Exception as e:
-        print(f"Error processing image: {e}")
+        print(f"❌ Error processing image: {e}")
         traceback.print_exc()
         
         # Clean up on error
@@ -958,7 +984,7 @@ def add_texts_to_image(
         # Note: We don't close text_clips or base_clip here because they are 
         # referenced by the returned CompositeVideoClip. The caller is responsible
         # for closing the returned composite clip.
-        print(f"Cleaned up image processing resources")
+        print(f"🧹 Cleaned up image processing resources")
 
 def resize_and_crop_clip(clip: VideoFileClip, size: Tuple[int, int], resize_dim: str) -> VideoFileClip:
     """Resize and crop a clip to the target size."""
