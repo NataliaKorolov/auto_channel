@@ -455,6 +455,9 @@ def create_video_with_audio(
             if use_temp_dir:
                 main_video_filename = f"main_temp_{os.getpid()}.mp4"
                 main_video_path = os.path.join(temp_dir, main_video_filename)
+                #  Show temp directory details
+                print(f"📁 Temp directory: {main_video_path}")
+
             else:
                 main_video_path = output_path.replace('.mp4', '_main_temp.mp4')
             
@@ -487,7 +490,7 @@ def create_video_with_audio(
                     "-color_trc", "bt709"
                 ],
                 threads=4,
-                logger=None
+                logger="bar"
             )
             
             # Build final concatenation list
@@ -587,7 +590,8 @@ def create_video_with_audio(
                 temp_output_filename = f"moviepy_temp_{os.getpid()}.mp4"
                 temp_output_path = os.path.join(temp_dir, temp_output_filename)
                 temp_files.append(temp_output_path)
-                
+                #  Show temp directory details
+                print(f"📁 Temp directory: {temp_output_path}")
                 # Write to temp first
                 final_clip.write_videofile(
                     temp_output_path,
