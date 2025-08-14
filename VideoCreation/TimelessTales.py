@@ -53,12 +53,13 @@ def load_tt_entries_from_excel(excel_path: str) -> List[VideoOverlayEntry]:
     
     return resolved_entries
 
-def process_video_entries(csv_path: str) -> List[str]:
+def process_video_entries(csv_path: str, use_temp_dir: bool = False) -> List[str]:
     """
     Process all video entries from the Excel file and create videos.
     
     Args:
         csv_path: Path to the CSV file containing video entries
+        use_temp_dir: Whether to use temporary directory for faster processing (Colab optimization)
 
     Returns:
         List of created video file paths
@@ -68,12 +69,12 @@ def process_video_entries(csv_path: str) -> List[str]:
         entries = load_tt_entries_from_excel(csv_path)
         created_videos = []
 
-        for entry in entries:
+        for entry in entries: 
             image_clip = None
             output_path = None
             
             try:
-                # Skip entries that don't have a status containing "ToDo" (case-insensitive, ignoring spaces)
+                # Skip entries that don't have a status containing "ToDo"
                 if not entry.status or not "todo" in entry.status.lower().replace(" ", ""):
                     logger.info(f"Skipping entry with status '{entry.status}': {entry.image_path}")
                     continue
@@ -99,14 +100,15 @@ def process_video_entries(csv_path: str) -> List[str]:
 
                 if image_clip:
                     logger.info("Creating video with audio...")
-                    # Create video with audio
+                    # Create video with audio - PASS THE NEW PARAMETER
                     video_path = create_video_with_audio(
                         image_clip=image_clip,
                         audio_path=entry.audio_path,
                         output_path=entry.output_video_path if entry.output_video_path else None,
                         output_dir=BASE_DIRECTORY_TT if not entry.output_video_path else None,
                         head_video_path=entry.head_video_path or None,
-                        tail_video_path=entry.tail_video_path or None
+                        tail_video_path=entry.tail_video_path or None,
+                        use_temp_dir=use_temp_dir  # 🚀 NEW PARAMETER
                     )
                     
                     if video_path:

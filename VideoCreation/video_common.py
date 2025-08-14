@@ -15,6 +15,9 @@ import cv2  # Add for GetVideoInfo function
 import traceback
 from datetime import datetime
 
+import subprocess
+import tempfile
+
 # Base directory constants
 BASE_DIRECTORY = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot"
 
@@ -359,10 +362,13 @@ def create_video_with_audio(
     output_path: str = None,
     head_video_path: str = None,
     tail_video_path: str = None,
-    size: Tuple[int, int] = (1920, 1080)
+    size: Tuple[int, int] = (1920, 1080),
+    use_ffmpeg_concat: bool = True,
+    use_temp_dir: bool = False  # New parameter for Colab optimization
 ) -> str:
     """
-    Create a video from an image clip with audio.
+    Create a video from an image clip with audio, with optional head/tail videos.
+    Uses FFmpeg concatenation for better performance when multiple videos are involved.
     
     Args:
         image_clip: The image as a CompositeVideoClip
@@ -372,6 +378,8 @@ def create_video_with_audio(
         head_video_path: Optional path to video to prepend to the beginning
         tail_video_path: Optional path to video to append to the end
         size: Output video dimensions (width, height)
+        use_ffmpeg_concat: If True, use FFmpeg for concatenation (faster), else use MoviePy
+        use_temp_dir: If True, use temporary directory for intermediate files (faster in Colab)
         
     Returns:
         Path to the created video file, or empty string on error
@@ -380,9 +388,9 @@ def create_video_with_audio(
     audio = None
     main_clip = None
     final_clip = None
-    head_clip = None
-    tail_clip = None
     resized_image_clip = None
+    temp_files = []
+    temp_dir = None
     
     try:
         # Validate inputs
@@ -404,159 +412,291 @@ def create_video_with_audio(
             resized_image_clip = image_clip.resized(width=size[0], height=size[1])
             current_image_clip = resized_image_clip
         
-        # 🚀 OPTIMIZATION 1: Reduce image quality for static content
-        # Since this is a static image, we can use lower quality without much visual impact
-        if hasattr(current_image_clip, 'img'):
-            # For static images, we can reduce the internal representation quality
-            print("Optimizing static image for video compression...")
-        
         # Set image duration to match audio
         timed_image_clip = current_image_clip.with_duration(audio.duration)
         
-        # 🚀 OPTIMIZATION 2: Use lower FPS for static content
-        # Static images don't need high frame rates
-        # This will be applied in the write_videofile call
-        
         # Add audio to clip
         main_clip = timed_image_clip.with_audio(audio)
-   
-        # Prepare head and tail videos if provided
-        if head_video_path:
-            head_clip = prepare_video_clip(head_video_path, main_clip, "Head")
-            if head_clip:
-                print(f"✅ Head clip successfully prepared: duration={head_clip.duration:.2f}s, size={head_clip.size}")
-            else:
-                print(f"❌ Head clip preparation failed for: {head_video_path}")
-            
-        if tail_video_path:
-            if tail_video_path and os.path.exists(tail_video_path):
-                print(f"Tail video file size: {os.path.getsize(tail_video_path)} bytes")
-            
-            tail_clip = prepare_video_clip(tail_video_path, main_clip, "Tail")
-            if tail_clip:
-                print(f"✅ Tail clip successfully prepared: duration={tail_clip.duration:.2f}s, size={tail_clip.size}")
-                
-                # Additional tail clip validation
-                try:
-                    test_frame = tail_clip.get_frame(0)
-                    print(f"✅ Tail clip can generate frames: {test_frame.shape}")
-                except Exception as frame_error:
-                    print(f"❌ Tail clip cannot generate frames: {frame_error}")
-                    tail_clip.close()
-                    tail_clip = None
-            else:
-                print(f"❌ Tail clip preparation failed for: {tail_video_path}")
         
-        # Build concatenation list
-        clips_to_concatenate = []
-        
-        if head_clip:
-            clips_to_concatenate.append(head_clip)
-            print(f"✅ Added head_clip to concatenation list (duration: {head_clip.duration:.2f}s)")
-            
-        clips_to_concatenate.append(main_clip)
-        print(f"✅ Added main_clip to concatenation list (duration: {main_clip.duration:.2f}s)")
-        
-        if tail_clip:
-            clips_to_concatenate.append(tail_clip)
-            print(f"✅ Added tail_clip to concatenation list (duration: {tail_clip.duration:.2f}s)")
-        
-        # Concatenate clips
-        if len(clips_to_concatenate) > 1:
-            print(f"🔄 Concatenating {len(clips_to_concatenate)} clips:")
-            for i, clip in enumerate(clips_to_concatenate):
-                clip_type = "head" if i == 0 and head_clip else ("tail" if i == len(clips_to_concatenate) - 1 and tail_clip else "main")
-                print(f"   Clip {i+1} ({clip_type}): duration={clip.duration:.2f}s, size={clip.size}")
-                
-                # Test each clip before concatenation
-                try:
-                    test_frame = clip.get_frame(0)
-                    print(f"   ✅ Clip {i+1} can generate frames")
-                except Exception as e:
-                    print(f"   ❌ Clip {i+1} CANNOT generate frames: {e}")
-                    
-            final_clip = concatenate_videoclips(clips_to_concatenate, method="compose")
-            
-            if final_clip:
-                print(f"✅ Concatenation successful: final duration={final_clip.duration:.2f}s")
-            else:
-                print(f"❌ Concatenation failed: final_clip is None")
-        else:
-            print(f"ℹ️ Only one clip available, using main_clip directly")
-            final_clip = main_clip
-
-        if final_clip is None:
-            raise ValueError("Final clip is None - video composition failed")
-            
-        # Generate output path
-        if output_path:
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        else:
+        # Generate output path if not provided
+        if not output_path:
             output_filename = f"{Path(audio_path).stem}.mp4"
             output_path = os.path.join(output_dir, output_filename)
         
-        print(f"Writing video to: {output_path}")
-          
-        # 🚀 OPTIMIZED VIDEO SETTINGS for static image content
-        final_clip.write_videofile(
-            output_path,
-            fps=8,                     # Very low frame rate                   # 🚀 REDUCED FPS: 12 instead of 24 for static images
-            codec="libx264",
-            audio_codec="aac",
-            preset="ultrafast",        
-            bitrate="250k",            # Even lower bitrate # 🚀 MUCH LOWER bitrate: 500k instead of 1000k for static content
-            audio_bitrate="24k",       # Minimal audio quality# 🚀 LOWER audio quality: 32k instead of 64k
-            temp_audiofile="temp-audio.m4a",
-            remove_temp=True,
-            ffmpeg_params=[
-                "-pix_fmt", "yuv420p",
-                "-movflags", "+faststart",
-                "-crf", "35",              # Higher compression (lower quality)          # 🚀 HIGHER compression: 32 instead of 28 (lower quality but much smaller)
-                "-tune", "stillimage", # 🚀 OPTIMIZE for static images
-                "-g", "250",           # 🚀 LARGER keyframe interval for static content
-                "-keyint_min", "25",   # 🚀 MINIMUM keyframe interval
-                "-sc_threshold", "0"   # 🚀 DISABLE scene change detection (not needed for static images)
-            ],
-            threads=2,                 
-            logger="bar"                
-        )
+        # Create temp directory if using temporary processing
+        if use_temp_dir:
+            import tempfile
+            temp_dir = tempfile.mkdtemp(prefix="video_creation_")
+            print(f"🚀 Using temporary directory for faster processing: {temp_dir}")
         
-
-        print(f"Successfully created video: {output_path}")
+        # Ensure output directory exists
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        # Check if we need concatenation
+        videos_for_concat = []
+        if head_video_path and os.path.exists(head_video_path):
+            videos_for_concat.append(head_video_path)
+            print(f"✅ Head video found: {head_video_path}")
+        elif head_video_path:
+            print(f"⚠️ Head video not found: {head_video_path}")
+            
+        if tail_video_path and os.path.exists(tail_video_path):
+            videos_for_concat.append(tail_video_path)
+            print(f"✅ Tail video found: {tail_video_path}")
+        elif tail_video_path:
+            print(f"⚠️ Tail video not found: {tail_video_path}")
+        
+        # Strategy decision: FFmpeg concat vs MoviePy
+        if len(videos_for_concat) > 0 and use_ffmpeg_concat:
+            # FFmpeg concatenation path (faster)
+            print(f"🚀 Using FFmpeg concatenation for better performance")
+            
+            # Create temporary main video file - use temp dir if specified
+            if use_temp_dir:
+                main_video_filename = f"main_temp_{os.getpid()}.mp4"
+                main_video_path = os.path.join(temp_dir, main_video_filename)
+            else:
+                main_video_path = output_path.replace('.mp4', '_main_temp.mp4')
+            
+            temp_files.append(main_video_path)
+            
+            # Write main video with YouTube-optimized settings
+            main_clip.write_videofile(
+                main_video_path,
+                fps=12,                    # Optimal for static image content
+                codec="libx264",
+                audio_codec="aac",
+                preset="slow",             # Better compression for upload
+                bitrate="1500k",           # YouTube optimal for 1080p static
+                audio_bitrate="128k",      # YouTube standard
+                temp_audiofile="temp-audio.m4a",
+                remove_temp=True,
+                ffmpeg_params=[
+                    "-pix_fmt", "yuv420p",
+                    "-movflags", "+faststart",
+                    "-crf", "23",
+                    "-tune", "stillimage",
+                    "-g", "120",
+                    "-keyint_min", "12",
+                    "-profile:v", "high",
+                    "-level", "4.0",
+                    "-maxrate", "2250k",
+                    "-bufsize", "4500k",
+                    "-colorspace", "bt709",
+                    "-color_primaries", "bt709",
+                    "-color_trc", "bt709"
+                ],
+                threads=4,
+                logger=None
+            )
+            
+            # Build final concatenation list
+            final_videos = []
+            if head_video_path and os.path.exists(head_video_path):
+                final_videos.append(head_video_path)
+            final_videos.append(main_video_path)
+            if tail_video_path and os.path.exists(tail_video_path):
+                final_videos.append(tail_video_path)
+            
+            # Use FFmpeg concatenation
+            if len(final_videos) > 1:
+                print(f"🔄 FFmpeg concatenating {len(final_videos)} videos...")
+                
+                # For temp processing, create temp output first, then copy
+                if use_temp_dir:
+                    temp_output_filename = f"final_temp_{os.getpid()}.mp4"
+                    temp_output_path = os.path.join(temp_dir, temp_output_filename)
+                    temp_files.append(temp_output_path)
+                    
+                    success = concatenate_videos_ffmpeg(final_videos, temp_output_path)
+                    
+                    if success:
+                        # Copy from temp to final location
+                        print(f"📁 Copying from temp directory to final location...")
+                        import shutil
+                        shutil.copy2(temp_output_path, output_path)
+                        success = os.path.exists(output_path)
+                else:
+                    success = concatenate_videos_ffmpeg(final_videos, output_path)
+                
+                if not success:
+                    print("⚠️ FFmpeg stream copy failed, trying with re-encoding...")
+                    if use_temp_dir:
+                        success = concatenate_videos_ffmpeg_with_reencoding(final_videos, temp_output_path)
+                        if success:
+                            import shutil
+                            shutil.copy2(temp_output_path, output_path)
+                            success = os.path.exists(output_path)
+                    else:
+                        success = concatenate_videos_ffmpeg_with_reencoding(final_videos, output_path)
+                    
+                if not success:
+                    print("❌ FFmpeg concatenation failed, falling back to MoviePy...")
+                    use_ffmpeg_concat = False  # Trigger MoviePy fallback
+                else:
+                    print(f"✅ FFmpeg concatenation successful: {output_path}")
+                    return output_path
+            else:
+                # Only main video, just copy it
+                if use_temp_dir:
+                    import shutil
+                    shutil.copy2(main_video_path, output_path)
+                else:
+                    import shutil
+                    shutil.copy2(main_video_path, output_path)
+                print(f"✅ Single video copied: {output_path}")
+                return output_path
+        
+        # MoviePy concatenation path (fallback or by choice)
+        if not use_ffmpeg_concat or len(videos_for_concat) == 0:
+            print(f"🎬 Using MoviePy concatenation")
+            
+            # Prepare head and tail videos if provided
+            head_clip = None
+            tail_clip = None
+            
+            if head_video_path and os.path.exists(head_video_path):
+                head_clip = prepare_video_clip(head_video_path, main_clip, "Head")
+                if head_clip:
+                    print(f"✅ Head clip prepared: duration={head_clip.duration:.2f}s")
+                    
+            if tail_video_path and os.path.exists(tail_video_path):
+                tail_clip = prepare_video_clip(tail_video_path, main_clip, "Tail")
+                if tail_clip:
+                    print(f"✅ Tail clip prepared: duration={tail_clip.duration:.2f}s")
+            
+            # Build concatenation list
+            clips_to_concatenate = []
+            if head_clip:
+                clips_to_concatenate.append(head_clip)
+            clips_to_concatenate.append(main_clip)
+            if tail_clip:
+                clips_to_concatenate.append(tail_clip)
+            
+            # Create final clip
+            if len(clips_to_concatenate) > 1:
+                print(f"🔄 MoviePy concatenating {len(clips_to_concatenate)} clips...")
+                final_clip = concatenate_videoclips(clips_to_concatenate, method="compose")
+                if not final_clip:
+                    raise ValueError("MoviePy concatenation failed")
+            else:
+                final_clip = main_clip
+            
+            # For MoviePy, also use temp directory if specified
+            if use_temp_dir:
+                temp_output_filename = f"moviepy_temp_{os.getpid()}.mp4"
+                temp_output_path = os.path.join(temp_dir, temp_output_filename)
+                temp_files.append(temp_output_path)
+                
+                # Write to temp first
+                final_clip.write_videofile(
+                    temp_output_path,
+                    fps=12,
+                    codec="libx264",
+                    audio_codec="aac",
+                    preset="slow",
+                    bitrate="1500k",
+                    audio_bitrate="128k",
+                    temp_audiofile="temp-audio.m4a",
+                    remove_temp=True,
+                    ffmpeg_params=[
+                        "-pix_fmt", "yuv420p",
+                        "-movflags", "+faststart",
+                        "-crf", "23",
+                        "-tune", "stillimage",
+                        "-g", "120",
+                        "-keyint_min", "12",
+                        "-profile:v", "high",
+                        "-level", "4.0",
+                        "-maxrate", "2250k",
+                        "-bufsize", "4500k",
+                        "-colorspace", "bt709",
+                        "-color_primaries", "bt709",
+                        "-color_trc", "bt709"
+                    ],
+                    threads=4,
+                    logger="bar"
+                )
+                
+                # Copy to final location
+                print(f"📁 Copying from temp directory to final location...")
+                import shutil
+                shutil.copy2(temp_output_path, output_path)
+            else:
+                # Write final video with YouTube optimization directly
+                final_clip.write_videofile(
+                    output_path,
+                    fps=12,
+                    codec="libx264",
+                    audio_codec="aac",
+                    preset="slow",
+                    bitrate="1500k",
+                    audio_bitrate="128k",
+                    temp_audiofile="temp-audio.m4a",
+                    remove_temp=True,
+                    ffmpeg_params=[
+                        "-pix_fmt", "yuv420p",
+                        "-movflags", "+faststart",
+                        "-crf", "23",
+                        "-tune", "stillimage",
+                        "-g", "120",
+                        "-keyint_min", "12",
+                        "-profile:v", "high",
+                        "-level", "4.0",
+                        "-maxrate", "2250k",
+                        "-bufsize", "4500k",
+                        "-colorspace", "bt709",
+                        "-color_primaries", "bt709",
+                        "-color_trc", "bt709"
+                    ],
+                    threads=4,
+                    logger="bar"
+                )
+        
+        print(f"✅ Successfully created video: {output_path}")
         return output_path
 
     except Exception as e:
-        print(f"Error creating video: {e}")
+        print(f"❌ Error creating video: {e}")
         traceback.print_exc()
         return ""
         
     finally:
-        # Clean up resources in reverse order of creation
+        # Cleanup resources
         print("Cleaning up video creation resources...")
         
         cleanup_items = [
-            ("final_clip", final_clip, main_clip),  # Don't close if same as main_clip
-            ("tail_clip", tail_clip, None),
-            ("head_clip", head_clip, None),
-            ("main_clip", main_clip, image_clip),  # Don't close if same as image_clip
-            ("resized_image_clip", resized_image_clip, None),
-            ("audio", audio, None)
+            ("final_clip", final_clip),
+            ("main_clip", main_clip),
+            ("resized_image_clip", resized_image_clip),
+            ("audio", audio)
         ]
         
-        for name, clip, skip_if_same in cleanup_items:
+        for name, clip in cleanup_items:
             if clip is not None:
                 try:
-                    # Skip cleanup if clip is the same object as another clip
-                    if skip_if_same is not None and clip is skip_if_same:
-                        print(f"Skipping {name} cleanup (same as reference)")
-                        continue
-                        
                     print(f"Closing {name}")
                     clip.close()
                 except Exception as cleanup_error:
                     print(f"Warning: Error closing {name}: {cleanup_error}")
-                    
-
+                
+        # Clean up temp files
+        for temp_file in temp_files:
+            try:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+                    print(f"Removed temp file: {temp_file}")
+            except Exception as e:
+                print(f"Warning: Could not remove temp file {temp_file}: {e}")
+        
+        # Clean up temp directory
+        if temp_dir and os.path.exists(temp_dir):
+            try:
+                import shutil
+                shutil.rmtree(temp_dir)
+                print(f"Cleaned up temp directory: {temp_dir}")
+            except Exception as e:
+                print(f"Warning: Could not remove temp directory {temp_dir}: {e}")
 def CreateAudioFile(
     output_file: str, 
     music_overlay_path: str, 
@@ -1393,6 +1533,7 @@ def resolve_path(path: str, base_path: str) -> str:
 def add_voice_to_video(video_path: str, voice_path: str, output_path: str = None, output_dir: str = None) -> str:
     """
     Add voice audio to an existing video with music, placing the voice in the middle of the video timeline.
+    Optimized for FFmpeg concatenation with create_video_with_audio function.
     
     Args:
         video_path: Path to the input video file
@@ -1406,8 +1547,13 @@ def add_voice_to_video(video_path: str, voice_path: str, output_path: str = None
     Raises:
         ValueError: If voice audio is longer than video duration
     """
+    video_clip = None
+    voice_audio = None
+    original_audio = None
+    composite_audio = None
+    final_video = None
+    
     try:
-        
         # Load the video
         video_clip = VideoFileClip(video_path)
         
@@ -1416,8 +1562,6 @@ def add_voice_to_video(video_path: str, voice_path: str, output_path: str = None
         
         # Check if voice is longer than video
         if voice_audio.duration > video_clip.duration:
-            video_clip.close()
-            voice_audio.close()
             raise ValueError(f"Voice audio duration ({voice_audio.duration:.2f}s) is longer than video duration ({video_clip.duration:.2f}s)")
         
         # Calculate start time to center the voice
@@ -1459,40 +1603,154 @@ def add_voice_to_video(video_path: str, voice_path: str, output_path: str = None
         # Ensure output directory exists
         os.makedirs(os.path.dirname(result_path), exist_ok=True)
         
-        # Write the final video
+        # 🚀 OPTIMIZED: Use IDENTICAL settings to create_video_with_audio for perfect FFmpeg concat compatibility
         final_video.write_videofile(
             result_path,
-            codec='libx264',
-            audio_codec='aac',
-            temp_audiofile='temp-audio.m4a',
-            remove_temp=True
+            fps=12,                    # MATCH: Same as main clip
+            codec="libx264",           # MATCH: Same codec
+            audio_codec="aac",         # MATCH: Same audio codec
+            preset="slow",             # MATCH: Same preset for quality
+            bitrate="1500k",           # MATCH: Same bitrate
+            audio_bitrate="128k",      # MATCH: Same audio bitrate
+            temp_audiofile="temp-audio.m4a",
+            remove_temp=True,
+            ffmpeg_params=[
+                "-pix_fmt", "yuv420p",         # MATCH: Same pixel format
+                "-movflags", "+faststart",     # MATCH: Same movflags
+                "-crf", "23",                  # MATCH: Same quality
+                "-tune", "stillimage",         # MATCH: Same tuning (if head/tail are static-like)
+                "-g", "120",                   # MATCH: Same GOP size
+                "-keyint_min", "12",           # MATCH: Same minimum keyframes
+                "-profile:v", "high",          # MATCH: Same profile
+                "-level", "4.0",               # MATCH: Same level
+                "-maxrate", "2250k",           # MATCH: Same max bitrate
+                "-bufsize", "4500k",           # MATCH: Same buffer size
+                "-colorspace", "bt709",        # MATCH: Same colorspace
+                "-color_primaries", "bt709",   # MATCH: Same color primaries
+                "-color_trc", "bt709"          # MATCH: Same color transfer
+            ],
+            threads=4,                 # MATCH: Same thread count
+            logger=None                # MATCH: Silent logging
         )
         
-        # Clean up
-        video_clip.close()
-        voice_audio.close()
-        final_video.close()
-        if original_audio:
-            original_audio.close()
-        composite_audio.close()
-        
-        print(f"Successfully added voice to video: {result_path}")
+        print(f"✅ Successfully added voice to video with FFmpeg-optimized encoding: {result_path}")
         return result_path
         
     except Exception as e:
-        print(f"Error adding voice to video: {str(e)}")
-        # Clean up in case of error
+        print(f"❌ Error adding voice to video: {str(e)}")
+        traceback.print_exc()
+        return None
+        
+    finally:
+        # Clean up resources
+        print("Cleaning up add_voice_to_video resources...")
+        
+        cleanup_items = [
+            ("final_video", final_video),
+            ("composite_audio", composite_audio),
+            ("original_audio", original_audio),
+            ("voice_audio", voice_audio),
+            ("video_clip", video_clip)
+        ]
+        
+        for name, item in cleanup_items:
+            if item is not None:
+                try:
+                    print(f"Closing {name}")
+                    item.close()
+                except Exception as cleanup_error:
+                    print(f"Warning: Error closing {name}: {cleanup_error}")
+
+
+def concatenate_videos_ffmpeg(video_paths: List[str], output_path: str) -> bool:
+    """
+    Concatenate videos using FFmpeg's concat demuxer - much faster than MoviePy
+    
+    Args:
+        video_paths: List of video file paths to concatenate
+        output_path: Output file path
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Create temporary file list for FFmpeg
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            filelist_path = f.name
+            for video_path in video_paths:
+                # Escape single quotes and write to file list
+                escaped_path = video_path.replace("'", "'\"'\"'")
+                f.write(f"file '{escaped_path}'\n")
+        
+        # Run FFmpeg concat
+        cmd = [
+            'ffmpeg',
+            '-f', 'concat',
+            '-safe', '0',
+            '-i', filelist_path,
+            '-c', 'copy',  # Stream copy - no re-encoding!
+            '-y',  # Overwrite output
+            output_path
+        ]
+        
+        print(f"🔄 FFmpeg concatenating {len(video_paths)} videos...")
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        
+        print(f"✅ FFmpeg concatenation successful: {output_path}")
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        print(f"❌ FFmpeg concatenation failed: {e}")
+        print(f"FFmpeg stderr: {e.stderr}")
+        return False
+    except Exception as e:
+        print(f"❌ Error during concatenation: {e}")
+        return False
+    finally:
+        # Clean up temporary file
         try:
-            if 'video_clip' in locals():
-                video_clip.close()
-            if 'voice_audio' in locals():
-                voice_audio.close()
-            if 'final_video' in locals():
-                final_video.close()
-            if 'original_audio' in locals() and original_audio:
-                original_audio.close()
-            if 'composite_audio' in locals():
-                composite_audio.close()
+            os.unlink(filelist_path)
         except:
             pass
-        return None
+
+def concatenate_videos_ffmpeg_with_reencoding(video_paths: List[str], output_path: str) -> bool:
+    """
+    Concatenate videos with re-encoding - use when videos have different formats
+    """
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            filelist_path = f.name
+            for video_path in video_paths:
+                escaped_path = video_path.replace("'", "'\"'\"'")
+                f.write(f"file '{escaped_path}'\n")
+        
+        cmd = [
+            'ffmpeg',
+            '-f', 'concat',
+            '-safe', '0',
+            '-i', filelist_path,
+            '-c:v', 'libx264',
+            '-preset', 'fast',
+            '-crf', '22',
+            '-c:a', 'aac',
+            '-b:a', '128k',
+            '-pix_fmt', 'yuv420p',
+            '-movflags', '+faststart',
+            '-y',
+            output_path
+        ]
+        
+        print(f"🔄 FFmpeg concatenating with re-encoding...")
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        
+        print(f"✅ FFmpeg concatenation with re-encoding successful")
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        print(f"❌ FFmpeg concatenation failed: {e}")
+        return False
+    finally:
+        try:
+            os.unlink(filelist_path)
+        except:
+            pass
