@@ -2,8 +2,7 @@ import os
 
 from video_common import (
     load_video_overlay_entries_from_excel, 
-    add_texts_to_image, 
-    create_video_with_audio,
+    create_video_from_image_and_audio,
     resolve_path,
     VideoOverlayEntry,
     BASE_DIRECTORY
@@ -13,7 +12,6 @@ from video_common import (
 # Define TimelessTales base directory
 BASE_DIRECTORY_TT = os.path.join(BASE_DIRECTORY, "TT")
 
-import os
 from typing import List
 import logging
 
@@ -54,34 +52,21 @@ def load_tt_entries_from_excel(excel_path: str) -> List[VideoOverlayEntry]:
     return resolved_entries
 
 def process_video_entries(csv_path: str, use_temp_dir: bool = False) -> List[str]:
-    """
-    Process all video entries from the Excel file and create videos.
-    
-    Args:
-        csv_path: Path to the CSV file containing video entries
-        use_temp_dir: Whether to use temporary directory for faster processing (Colab optimization)
-
-    Returns:
-        List of created video file paths
-    """
+    """Process all video entries with the new combined function"""
     try:
-        # Load entries from Excel with path resolution
         entries = load_tt_entries_from_excel(csv_path)
         created_videos = []
 
         for entry in entries: 
-            image_clip = None
-            output_path = None
-            
             try:
-                # Skip entries that don't have a status containing "ToDo"
+                # Skip non-todo entries
                 if not entry.status or not "todo" in entry.status.lower().replace(" ", ""):
                     logger.info(f"Skipping entry with status '{entry.status}': {entry.image_path}")
                     continue
                 
                 logger.info(f"Processing entry: {os.path.basename(entry.image_path)}")
                 
-                # Validate required files exist
+                # Validate files exist
                 if not os.path.exists(entry.image_path):
                     logger.error(f"Image file not found: {entry.image_path}")
                     continue
@@ -90,49 +75,30 @@ def process_video_entries(csv_path: str, use_temp_dir: bool = False) -> List[str
                     logger.error(f"Audio file not found: {entry.audio_path}")
                     continue
                 
-                # Create image with text overlays
-                logger.info("Creating image clip with text overlays...")
-                image_clip, output_path = add_texts_to_image(
+                # 🚀 ONE-STEP PROCESS: Create complete video
+                logger.info("Creating complete video...")
+                video_path = create_video_from_image_and_audio(
                     image_path=entry.image_path,
                     text_overlays=entry.overlays,
-                    write_image_as_file=False
+                    audio_path=entry.audio_path,
+                    output_path=entry.output_video_path if entry.output_video_path else None,
+                    output_dir=BASE_DIRECTORY_TT if not entry.output_video_path else None,
+                    head_video_path=entry.head_video_path or None,
+                    tail_video_path=entry.tail_video_path or None,
+                    use_temp_dir=use_temp_dir
                 )
-
-                if image_clip:
-                    logger.info("Creating video with audio...")
-                    # Create video with audio - PASS THE NEW PARAMETER
-                    video_path = create_video_with_audio(
-                        image_clip=image_clip,
-                        audio_path=entry.audio_path,
-                        output_path=entry.output_video_path if entry.output_video_path else None,
-                        output_dir=BASE_DIRECTORY_TT if not entry.output_video_path else None,
-                        head_video_path=entry.head_video_path or None,
-                        tail_video_path=entry.tail_video_path or None,
-                        use_temp_dir=use_temp_dir  # 🚀 NEW PARAMETER
-                    )
-                    
-                    if video_path:
-                        created_videos.append(video_path)
-                        logger.info(f"✅ Successfully created video: {os.path.basename(video_path)}")
-                    else:
-                        logger.error(f"❌ Failed to create video for entry with image: {entry.image_path}")
+                
+                if video_path:
+                    created_videos.append(video_path)
+                    logger.info(f"✅ Successfully created video: {os.path.basename(video_path)}")
                 else:
-                    logger.error(f"❌ Failed to create image clip for entry with image: {entry.image_path}")
+                    logger.error(f"❌ Failed to create video for entry: {entry.image_path}")
 
             except Exception as e:
                 logger.error(f"❌ Error processing entry {entry.image_path}: {str(e)}")
                 import traceback
                 traceback.print_exc()
                 continue
-                
-            finally:
-                # Critical: Clean up the image_clip to prevent memory leaks
-                if image_clip is not None:
-                    try:
-                        logger.debug("Cleaning up image clip...")
-                        image_clip.close()
-                    except Exception as cleanup_error:
-                        logger.warning(f"Warning: Error closing image_clip: {cleanup_error}")
 
         logger.info(f"Completed processing. Created {len(created_videos)} videos out of {len(entries)} entries.")
         return created_videos
