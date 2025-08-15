@@ -376,7 +376,7 @@ def create_image_with_text_overlays(
     Offsets in TextOverlay (1..100) are interpreted relative to that region:
       - horizontal_offset=50, vertical_offset=50 => exact center of the left panel
       - larger vertical_offset => higher on the screen (e.g., 62 is a bit above center)
-    Returns: (CompositeVideoClip, saved_image_path_or_empty)
+    Returns: CompositeVideoClip
     """
     img = None
     base_clip = None
@@ -433,7 +433,6 @@ def create_image_with_text_overlays(
             try:
                 max_text_w = int(region_w * max_text_width_ratio)
 
-                # 🚀 FIXED: Use text_align instead of align for MoviePy 2.x
                 txt_clip = TextClip(
                     text=overlay.text,
                     font=overlay.style.font,
@@ -443,24 +442,60 @@ def create_image_with_text_overlays(
                     stroke_width=overlay.style.stroke_width,
                     method="caption",
                     size=(max_text_w, None),
-                    text_align="center",  # 🚀 FIXED: Changed from align to text_align
+                    text_align="center",
                 ).with_duration(duration)
 
-                # center INSIDE region using your % offsets
+                text_clips.append(txt_clip)  # Track for cleanup
+                
+                print(f"📝 Text {i+1}: '{overlay.text[:30]}...' → size {txt_clip.w}x{txt_clip.h}")
+
+                # 🚀 FIXED: Improved position calculation with better bounds checking
+                # Center INSIDE region using your % offsets
                 cx = region_left + int((overlay.horizontal_offset / 100.0) * region_w)
                 cy = region_top  + int(((100 - overlay.vertical_offset) / 100.0) * region_h)
 
-                x_pos = max(region_left,  min(cx - txt_clip.w // 2, region_left + region_w - txt_clip.w))
-                y_pos = max(region_top,   min(cy - txt_clip.h // 2, region_top  + region_h - txt_clip.h))
+                # 🚀 FIXED: Proper bounds checking that prevents text cutoff
+                # Calculate initial positions (centered)
+                x_pos = cx - txt_clip.w // 2
+                y_pos = cy - txt_clip.h // 2
+                
+                # 🚀 BOUNDARY CHECKING: Ensure text stays within region bounds
+                # Check horizontal boundaries
+                if x_pos < region_left:
+                    x_pos = region_left
+                    print(f"⚠️ Text {i+1}: Adjusted X position to stay within left boundary")
+                elif x_pos + txt_clip.w > region_right:
+                    x_pos = region_right - txt_clip.w
+                    print(f"⚠️ Text {i+1}: Adjusted X position to stay within right boundary")
+                
+                # Check vertical boundaries - THIS IS THE KEY FIX
+                if y_pos < region_top:
+                    y_pos = region_top
+                    print(f"⚠️ Text {i+1}: Adjusted Y position to stay within top boundary")
+                elif y_pos + txt_clip.h > region_bottom:
+                    y_pos = region_bottom - txt_clip.h
+                    print(f"⚠️ Text {i+1}: Adjusted Y position to stay within bottom boundary (was too low)")
+                
+                # 🚀 EXTRA SAFETY: Ensure we have minimum margins
+                min_margin = 5  # pixels
+                x_pos = max(region_left + min_margin, 
+                           min(x_pos, region_right - txt_clip.w - min_margin))
+                y_pos = max(region_top + min_margin, 
+                           min(y_pos, region_bottom - txt_clip.h - min_margin))
 
-                print(f"📝 Text {i+1}: '{overlay.text[:30]}...' "
-                      f"→ size {txt_clip.w}x{txt_clip.h}, pos ({x_pos},{y_pos})")
+                print(f"📍 Text {i+1} final position: ({x_pos},{y_pos}) within region bounds")
+                
+                # 🚀 DEBUG: Show if text would be outside image bounds
+                if y_pos + txt_clip.h > H:
+                    print(f"🚨 WARNING: Text {i+1} bottom edge ({y_pos + txt_clip.h}) exceeds image height ({H})")
+                if x_pos + txt_clip.w > W:
+                    print(f"🚨 WARNING: Text {i+1} right edge ({x_pos + txt_clip.w}) exceeds image width ({W})")
 
                 clips.append(txt_clip.with_position((x_pos, y_pos)))
-                text_clips.append(txt_clip)
 
             except Exception as e:
                 print(f"❌ Text overlay {i+1} failed: {e}")
+                traceback.print_exc()
 
         # ---------- compose ----------
         result = CompositeVideoClip(clips).with_duration(duration)
@@ -485,7 +520,7 @@ def create_image_with_text_overlays(
                 result.close()
             except: 
                 pass
-        return None, ""
+        return None
         
     finally:
         if img:
