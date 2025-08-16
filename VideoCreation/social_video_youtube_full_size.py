@@ -19,6 +19,7 @@ def create_complete_video_for_greece(language: str, orientation: str, cleanup_in
     Returns:
         str: Path to final video if successful, None if failed
     """
+    
     if video_config is None:
         video_config = config
     
