@@ -433,7 +433,6 @@ def create_video_from_image_and_audio(
         # 🚀 FIX: Ensure output_dir has a valid value
         if output_dir is None:
             output_dir = BASE_DIRECTORY
-            print(f"📁 Output directory was None, using BASE_DIRECTORY: {output_dir}")
         
         # Setup temporary directory if requested
         if use_temp_dir:
