@@ -18,6 +18,9 @@ from datetime import datetime
 import subprocess
 import tempfile
 
+# Add import for the new image processing function
+from image_common import create_image_with_text_overlays_static
+
 # Base directory constants
 BASE_DIRECTORY = r"C:\NATALIA\Generative AI\auto_channel\Files for SocialVideoBot"
 
@@ -356,182 +359,6 @@ def prepare_video_clip(video_path: str, main_clip, clip_name: str = "Video") -> 
 
 
 
-
-def create_image_with_text_overlays(
-    image_path: str,
-    text_overlays: List["TextOverlay"],
-    output_dir: str = BASE_DIRECTORY,
-    write_image_as_file: bool = False,
-    *,
-    duration: float = 6.0,
-    # safe area (top, right, bottom, left) in %
-    safe_area_pct: Tuple[int, int, int, int] = (5, 6, 14, 6),
-    # where the left panel ends, as % of width (e.g., your portrait starts at ~62%)
-    panel_split_pct: float = 62.0,
-    # cap text wrapping width within the target region
-    max_text_width_ratio: float = 0.90
-) -> CompositeVideoClip:
-    """
-    Adds text overlays positioned INSIDE the left panel (safe area ∩ panel segment).
-    Offsets in TextOverlay (1..100) are interpreted relative to that region:
-      - horizontal_offset=50, vertical_offset=50 => exact center of the left panel
-      - larger vertical_offset => higher on the screen (e.g., 62 is a bit above center)
-    Returns: CompositeVideoClip
-    """
-    img = None
-    base_clip = None
-    text_clips = []
-    result = None
-    output_path = ""
-
-    try:
-        # --- validate ---
-        if not os.path.exists(image_path):
-            raise ValueError(f"Image path does not exist: {image_path}")
-
-        for overlay in text_overlays:
-            if not (1 <= overlay.horizontal_offset <= 100 and 1 <= overlay.vertical_offset <= 100):
-                raise ValueError("Offset values must be between 1 and 100")
-
-        # --- output filename (optional) ---
-        if write_image_as_file:
-            text_cleaned = re.sub(r'[\\/*?:"<>|\n]', '_', text_overlays[0].text).replace(' ', '_')
-            output_filename = f"{Path(image_path).stem}_{text_cleaned}{Path(image_path).suffix}"
-            os.makedirs(output_dir, exist_ok=True)
-            output_path = os.path.join(output_dir, output_filename)
-
-        # --- load image & base clip ---
-        img = Image.open(image_path)
-        W, H = img.width, img.height
-        print(f"📐 Image: {W}x{H}")
-
-        base_clip = ImageClip(image_path).with_duration(duration)
-        clips = [base_clip]
-
-        # ---------- SAFE AREA ----------
-        top_p, right_p, bottom_p, left_p = safe_area_pct
-        safe_left   = int(W * (left_p   / 100.0))
-        safe_right  = W - int(W * (right_p  / 100.0))
-        safe_top    = int(H * (top_p    / 100.0))
-        safe_bottom = H - int(H * (bottom_p / 100.0))
-
-        # ---------- LEFT PANEL REGION (safe ∩ left segment) ----------
-        split_x = int(W * (panel_split_pct / 100.0))
-        region_left   = safe_left
-        region_right  = min(safe_right, split_x)
-        region_top    = safe_top
-        region_bottom = safe_bottom
-        region_w = max(1, region_right - region_left)
-        region_h = max(1, region_bottom - region_top)
-
-        print(f"🛟 Region (left panel in safe area): "
-              f"{region_left},{region_top} to {region_right},{region_bottom} "
-              f"→ {region_w}x{region_h}")
-
-        # ---------- add text overlays (inside region) ----------
-        for i, overlay in enumerate(text_overlays):
-            try:
-                max_text_w = int(region_w * max_text_width_ratio)
-
-                txt_clip = TextClip(
-                    text=overlay.text,
-                    font=overlay.style.font,
-                    font_size=overlay.style.font_size,
-                    color=overlay.style.text_color,
-                    stroke_color=overlay.style.stroke_color,
-                    stroke_width=overlay.style.stroke_width,
-                    method="caption",
-                    size=(max_text_w, None),
-                    text_align="center",
-                ).with_duration(duration)
-
-                text_clips.append(txt_clip)  # Track for cleanup
-                
-                print(f"📝 Text {i+1}: '{overlay.text[:30]}...' → size {txt_clip.w}x{txt_clip.h}")
-
-                # 🚀 FIXED: Improved position calculation with better bounds checking
-                # Center INSIDE region using your % offsets
-                cx = region_left + int((overlay.horizontal_offset / 100.0) * region_w)
-                cy = region_top  + int(((100 - overlay.vertical_offset) / 100.0) * region_h)
-
-                # 🚀 FIXED: Proper bounds checking that prevents text cutoff
-                # Calculate initial positions (centered)
-                x_pos = cx - txt_clip.w // 2
-                y_pos = cy - txt_clip.h // 2
-                
-                # 🚀 BOUNDARY CHECKING: Ensure text stays within region bounds
-                # Check horizontal boundaries
-                if x_pos < region_left:
-                    x_pos = region_left
-                    print(f"⚠️ Text {i+1}: Adjusted X position to stay within left boundary")
-                elif x_pos + txt_clip.w > region_right:
-                    x_pos = region_right - txt_clip.w
-                    print(f"⚠️ Text {i+1}: Adjusted X position to stay within right boundary")
-                
-                # Check vertical boundaries - THIS IS THE KEY FIX
-                if y_pos < region_top:
-                    y_pos = region_top
-                    print(f"⚠️ Text {i+1}: Adjusted Y position to stay within top boundary")
-                elif y_pos + txt_clip.h > region_bottom:
-                    y_pos = region_bottom - txt_clip.h
-                    print(f"⚠️ Text {i+1}: Adjusted Y position to stay within bottom boundary (was too low)")
-                
-                # 🚀 EXTRA SAFETY: Ensure we have minimum margins
-                min_margin = 5  # pixels
-                x_pos = max(region_left + min_margin, 
-                           min(x_pos, region_right - txt_clip.w - min_margin))
-                y_pos = max(region_top + min_margin, 
-                           min(y_pos, region_bottom - txt_clip.h - min_margin))
-
-                print(f"📍 Text {i+1} final position: ({x_pos},{y_pos}) within region bounds")
-                
-                # 🚀 DEBUG: Show if text would be outside image bounds
-                if y_pos + txt_clip.h > H:
-                    print(f"🚨 WARNING: Text {i+1} bottom edge ({y_pos + txt_clip.h}) exceeds image height ({H})")
-                if x_pos + txt_clip.w > W:
-                    print(f"🚨 WARNING: Text {i+1} right edge ({x_pos + txt_clip.w}) exceeds image width ({W})")
-
-                clips.append(txt_clip.with_position((x_pos, y_pos)))
-
-            except Exception as e:
-                print(f"❌ Text overlay {i+1} failed: {e}")
-                traceback.print_exc()
-
-        # ---------- compose ----------
-        result = CompositeVideoClip(clips).with_duration(duration)
-
-        # save still if requested
-        if write_image_as_file and result:
-            try:
-                result.save_frame(output_path)
-                print(f"💾 Saved still with overlays: {output_path}")
-            except Exception as e:
-                print(f"❌ Could not save still: {e}")
-                output_path = ""
-
-        print(f"✅ Composite ready with {len(text_clips)} text overlays")
-        return result
-
-    except Exception as e:
-        print(f"❌ Error processing image: {e}")
-        traceback.print_exc()
-        if result:
-            try: 
-                result.close()
-            except: 
-                pass
-        return None
-        
-    finally:
-        if img:
-            try: 
-                img.close()
-            except: 
-                pass
-        print("🧹 Cleaned up image processing resources")
-
-
-
 def get_youtube_optimized_settings(silent: bool = False) -> dict:
     """Get optimized settings for YouTube upload"""
     return {
@@ -562,6 +389,7 @@ def get_youtube_optimized_settings(silent: bool = False) -> dict:
         "logger": None if silent else "bar"  # 🚀 FIXED: Configurable logger
     }
 
+
 def create_video_from_image_and_audio(
     image_path: str,
     text_overlays: List[TextOverlay],
@@ -578,7 +406,7 @@ def create_video_from_image_and_audio(
 ) -> str:
     """
     Complete pipeline: Create video from image + text overlays + audio with optional head/tail.
-    This replaces the two-step process of add_texts_to_image + create_video_with_audio.
+    Now uses the new PIL-based static image overlay function for better performance.
     
     Returns:
         str: Path to created video file, or empty string on error
@@ -592,193 +420,154 @@ def create_video_from_image_and_audio(
     temp_dir = None
     
     try:
+        print(f"🎬 Creating video from image and audio...")
+        print(f"📁 Image: {os.path.basename(image_path)}")
+        print(f"🎵 Audio: {os.path.basename(audio_path)}")
+        
         # Validate inputs
         if not os.path.exists(image_path):
-            raise FileNotFoundError(f"Image file not found: {image_path}")
+            raise ValueError(f"Image file not found: {image_path}")
         if not os.path.exists(audio_path):
-            raise FileNotFoundError(f"Audio file not found: {audio_path}")
-            
-        print(f"🎬 Creating video from: {os.path.basename(image_path)} + {os.path.basename(audio_path)}")
+            raise ValueError(f"Audio file not found: {audio_path}")
         
-        # 🚀 STEP 1: Load audio to get duration (single load!)
-        audio = AudioFileClip(audio_path)
-        duration = audio.duration
-        print(f"🎵 Audio duration: {duration:.2f}s")
+        # 🚀 FIX: Ensure output_dir has a valid value
+        if output_dir is None:
+            output_dir = BASE_DIRECTORY
+            print(f"📁 Output directory was None, using BASE_DIRECTORY: {output_dir}")
         
-        # 🚀 STEP 2: Create image with text overlays (with correct duration from start)
-        print("📝 Creating image with text overlays...")
-        image_clip = create_image_with_text_overlays(
-            image_path=image_path,
-            text_overlays=text_overlays,
-            duration=duration,  # Use actual audio duration
-            safe_area_pct=safe_area_pct,
-            max_text_width_ratio=max_text_width_ratio
-            )
-        
-        if not image_clip:
-            raise ValueError("Failed to create image clip with text overlays")
-        
-        # 🚀 STEP 3: Add audio to image clip
-        main_clip = image_clip.with_audio(audio)
-        print(f"✅ Main clip created: {duration:.2f}s")
-        
-        # Generate output path if not provided
-        if not output_path:
-            output_filename = f"{Path(audio_path).stem}.mp4"
-            output_path = os.path.join(output_dir, output_filename)
-        
-        # Create temp directory if using temporary processing
+        # Setup temporary directory if requested
         if use_temp_dir:
             import tempfile
             temp_dir = tempfile.mkdtemp(prefix="video_creation_")
-            print(f"🚀 Using temporary directory: {temp_dir}")
+            print(f"📁 Using temporary directory: {temp_dir}")
         
+        # STEP 1: Create static image with text overlays using PIL
+        print("🎨 Creating image with text overlays (using PIL)...")
+        
+        # Determine temporary output directory for the overlay image
+        overlay_output_dir = temp_dir if use_temp_dir else os.path.join(output_dir, "temp_overlays")
+        
+        overlay_image_path = create_image_with_text_overlays_static(
+            image_path=image_path,
+            text_overlays=text_overlays,
+            output_dir=overlay_output_dir,
+            safe_area_pct=safe_area_pct,
+            max_text_width_ratio=max_text_width_ratio
+        )
+        
+        if not overlay_image_path or not os.path.exists(overlay_image_path):
+            raise ValueError("Failed to create image with text overlays")
+        
+        # Track temporary file for cleanup
+        if use_temp_dir:
+            temp_files.append(overlay_image_path)
+        
+        print(f"✅ Created overlay image: {os.path.basename(overlay_image_path)}")
+        
+        # STEP 2: Load audio and create video clip from the overlay image
+        print("🎵 Loading audio...")
+        audio = AudioFileClip(audio_path)
+        audio_duration = audio.duration
+        print(f"⏱️ Audio duration: {audio_duration:.2f} seconds")
+        
+        print("🖼️ Creating video clip from overlay image...")
+        image_clip = ImageClip(overlay_image_path, duration=audio_duration)
+        
+        # Resize image clip to target size
+        print(f"📐 Resizing to {size[0]}x{size[1]}...")
+        image_clip = image_clip.resized(size)
+        
+        # Set audio
+        main_clip = image_clip.with_audio(audio)
+        print(f"✅ Main video clip created: {audio_duration:.2f}s at {size[0]}x{size[1]}")
+        
+        # STEP 3: Handle head and tail videos
+        clips_to_concat = []
+        
+        # Add head video if provided
+        if head_video_path and os.path.exists(head_video_path):
+            print(f"🎬 Adding head video: {os.path.basename(head_video_path)}")
+            head_clip = prepare_video_clip(head_video_path, main_clip, "Head")
+            if head_clip:
+                clips_to_concat.append(head_clip)
+        
+        # Add main clip
+        clips_to_concat.append(main_clip)
+        
+        # Add tail video if provided
+        if tail_video_path and os.path.exists(tail_video_path):
+            print(f"🎬 Adding tail video: {os.path.basename(tail_video_path)}")
+            tail_clip = prepare_video_clip(tail_video_path, main_clip, "Tail")
+            if tail_clip:
+                clips_to_concat.append(tail_clip)
+        
+        # STEP 4: Concatenate clips if needed
+        if len(clips_to_concat) > 1:
+            print(f"🔗 Concatenating {len(clips_to_concat)} clips...")
+            final_clip = concatenate_videoclips(clips_to_concat, method="compose")
+        else:
+            final_clip = clips_to_concat[0]
+        
+        # STEP 5: Generate output path and export
+        if not output_path:
+            # Generate filename from image name
+            base_name = os.path.splitext(os.path.basename(image_path))[0]
+            output_filename = f"{base_name}_video.mp4"
+            output_path = os.path.join(output_dir, output_filename)
+        
+        # Ensure output directory exists
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
-        # 🚀 STEP 4: Handle concatenation if head/tail videos provided
-        videos_for_concat = []
-        if head_video_path and os.path.exists(head_video_path):
-            videos_for_concat.append(head_video_path)
-            print(f"✅ Head video: {head_video_path}")
-        if tail_video_path and os.path.exists(tail_video_path):
-            videos_for_concat.append(tail_video_path)
-            print(f"✅ Tail video: {tail_video_path}")
+        print(f"💾 Exporting final video: {os.path.basename(output_path)}")
+        print(f"⏱️ Final duration: {final_clip.duration:.2f} seconds")
         
-        # Strategy: FFmpeg concat vs MoviePy
-        if len(videos_for_concat) > 0 and use_ffmpeg_concat:
-            print(f"🚀 Using FFmpeg concatenation for performance")
-            
-            # Create temp main video
-            if use_temp_dir:
-                main_video_path = os.path.join(temp_dir, f"main_{os.getpid()}.mp4")
-            else:
-                main_video_path = output_path.replace('.mp4', '_main_temp.mp4')
-            temp_files.append(main_video_path)
-            
-            # 🚀 FIXED: Write main video with optimized settings (no duplicate logger)
-            main_clip.write_videofile(
-                main_video_path,
-                **get_youtube_optimized_settings(silent=True)  # Use silent=True to avoid progress bar for intermediate files
-            )
-            
-            # Build concatenation list
-            final_videos = []
-            if head_video_path and os.path.exists(head_video_path):
-                final_videos.append(head_video_path)
-            final_videos.append(main_video_path)
-            if tail_video_path and os.path.exists(tail_video_path):
-                final_videos.append(tail_video_path)
-            
-            # FFmpeg concatenation
-            if use_temp_dir:
-                temp_output = os.path.join(temp_dir, f"final_{os.getpid()}.mp4")
-                temp_files.append(temp_output)
-                success = concatenate_videos_ffmpeg(final_videos, temp_output)
-                if success:
-                    import shutil
-                    shutil.copy2(temp_output, output_path)
-                    success = os.path.exists(output_path)
-            else:
-                success = concatenate_videos_ffmpeg(final_videos, output_path)
-            
-            if not success:
-                print("⚠️ FFmpeg stream copy failed, trying with re-encoding...")
-                if use_temp_dir:
-                    success = concatenate_videos_ffmpeg_with_reencoding(final_videos, temp_output)
-                    if success:
-                        import shutil
-                        shutil.copy2(temp_output, output_path)
-                        success = os.path.exists(output_path)
-                else:
-                    success = concatenate_videos_ffmpeg_with_reencoding(final_videos, output_path)
-                    
-                if not success:
-                    print("❌ FFmpeg concatenation failed completely, falling back to MoviePy...")
-                    use_ffmpeg_concat = False
-                else:
-                    print(f"✅ Video created with FFmpeg re-encoding: {output_path}")
-                    return output_path
-            else:
-                print(f"✅ Video created with FFmpeg stream copy: {output_path}")
-                return output_path
+        # Get optimized export settings
+        export_settings = get_youtube_optimized_settings(silent=False)
         
-        # MoviePy path (fallback or single video)
-        if not use_ffmpeg_concat or len(videos_for_concat) == 0:
-            print(f"🎬 Using MoviePy processing")
-            
-            # Handle head/tail with MoviePy
-            clips_to_concatenate = []
-            if head_video_path and os.path.exists(head_video_path):
-                head_clip = prepare_video_clip(head_video_path, main_clip, "Head")
-                if head_clip:
-                    clips_to_concatenate.append(head_clip)
-                    
-            clips_to_concatenate.append(main_clip)
-            
-            if tail_video_path and os.path.exists(tail_video_path):
-                tail_clip = prepare_video_clip(tail_video_path, main_clip, "Tail")
-                if tail_clip:
-                    clips_to_concatenate.append(tail_clip)
-            
-            # Create final clip
-            if len(clips_to_concatenate) > 1:
-                final_clip = concatenate_videoclips(clips_to_concatenate, method="compose")
-            else:
-                final_clip = main_clip
-            
-            # Write final video
-            if use_temp_dir:
-                temp_output = os.path.join(temp_dir, f"moviepy_{os.getpid()}.mp4")
-                temp_files.append(temp_output)
-                final_clip.write_videofile(temp_output, **get_youtube_optimized_settings())
-                import shutil
-                shutil.copy2(temp_output, output_path)
-            else:
-                final_clip.write_videofile(output_path, **get_youtube_optimized_settings())
+        # Export the video
+        final_clip.write_videofile(
+            output_path,
+            **export_settings
+        )
         
-        print(f"✅ Successfully created video: {output_path}")
+        print(f"✅ Video created successfully: {output_path}")
         return output_path
-
+        
     except Exception as e:
         print(f"❌ Error creating video: {e}")
+        import traceback
         traceback.print_exc()
         return ""
         
     finally:
-        # Cleanup all resources
-        print("🧹 Cleaning up video creation resources...")
-        
-        cleanup_items = [
-            ("final_clip", final_clip),
-            ("main_clip", main_clip),
-            ("image_clip", image_clip),
-            ("audio", audio)
-        ]
-        
-        for name, clip in cleanup_items:
-            if clip is not None:
+        # Clean up all clips
+        clips_to_cleanup = [audio, image_clip, main_clip, final_clip]
+        for clip in clips_to_cleanup:
+            if clip:
                 try:
-                    print(f"Closing {name}")
                     clip.close()
-                except Exception as e:
-                    print(f"Warning: Error closing {name}: {e}")
+                except:
+                    pass
         
-        # Clean up temp files and directory
-        for temp_file in temp_files:
-            try:
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
-                    print(f"Removed temp file: {temp_file}")
-            except Exception as e:
-                print(f"Warning: Could not remove temp file {temp_file}: {e}")
-                
-        if temp_dir and os.path.exists(temp_dir):
+        # Clean up temporary files if using temp directory
+        if use_temp_dir and temp_files:
+            print("🧹 Cleaning up temporary files...")
+            for temp_file in temp_files:
+                try:
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
+                        print(f"🗑️ Removed: {os.path.basename(temp_file)}")
+                except Exception as e:
+                    print(f"⚠️ Could not remove temp file {temp_file}: {e}")
+        
+        # Clean up temporary directory
+        if use_temp_dir and temp_dir and os.path.exists(temp_dir):
             try:
                 import shutil
                 shutil.rmtree(temp_dir)
-                print(f"Cleaned up temp directory: {temp_dir}")
+                print(f"🗑️ Removed temporary directory: {temp_dir}")
             except Exception as e:
-                print(f"Warning: Could not remove temp directory {temp_dir}: {e}")
+                print(f"⚠️ Could not remove temp directory {temp_dir}: {e}")
 
 def CreateAudioFile(
     output_file: str, 
