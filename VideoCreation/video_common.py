@@ -800,7 +800,7 @@ def CreateVideoFile(
                 
                 # Add text overlay if available
                 if idx < len(texts) and texts[idx].strip():
-                    text_overlay_clip = add_text_overlay(current_clip, texts[idx, size])
+                    text_overlay_clip = add_text_overlay(current_clip, texts[idx], size)
                     
                     text_overlay_clip.get_frame(0)
                     
