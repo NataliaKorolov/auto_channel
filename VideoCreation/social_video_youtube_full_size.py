@@ -1,27 +1,21 @@
 from video_common import CreateAudioFile, CreateVideoFile, ConcatenateAudioFiles, ConcatenateVideoFiles
-from config import get_local_config, VideoConfig
+from config import get_local_config, VideoConfigGreece
 import os
 
-# Initialize configuration
-config = get_local_config()
-
-def create_complete_video_for_greece(language: str, orientation: str, cleanup_intermediate: bool = False, build_all: bool = True, video_config: VideoConfig = None):
+def create_complete_video_for_greece(language: str, orientation: str, video_config: VideoConfigGreece, cleanup_intermediate: bool = False, build_all: bool = True):
     """
     Creates a complete video with intro, main content, and tail for the specified language and orientation.
     
     Args:
         language: Language code ("EN" or "RU")
         orientation: Video orientation ("horizontal" or "vertical")
+        video_config: VideoConfigGreece instance with project configuration
         cleanup_intermediate: Whether to clean up intermediate files to save storage
         build_all: If False, skips intro/tail creation and uses existing files
-        video_config: VideoConfig instance (uses global config if None)
         
     Returns:
         str: Path to final video if successful, None if failed
     """
-    
-    if video_config is None:
-        video_config = config
     
     print(f"\n🎬 Creating {language} {orientation} video")
     print("=" * 50)
@@ -79,7 +73,7 @@ def create_complete_video_for_greece(language: str, orientation: str, cleanup_in
                     audio_path=paths["intro_audio"],
                     csv_path=video_config.intro_paths["text_overlay_csv"],
                     text_column=paths["text_column"],
-                    video_paths=video_config.get_video_paths_for_workflow("intro"),  # Fixed: use method to ensure list
+                    video_paths=video_config.get_video_paths_for_workflow("intro"),
                     use_audio_duration=False
                 )
                 
@@ -163,7 +157,7 @@ def create_complete_video_for_greece(language: str, orientation: str, cleanup_in
                 audio_path=paths["audio_with_tail"],
                 csv_path=[video_config.current_paths["csv"], video_config.tail_paths["text_overlay_csv"]],
                 text_column=paths["text_column"],
-                video_paths=video_config.get_video_paths_for_workflow("combined"),  # Fixed: use method to ensure list
+                video_paths=video_config.get_video_paths_for_workflow("combined"),
                 use_audio_duration=True
             )
             
@@ -230,23 +224,23 @@ def create_complete_video_for_greece(language: str, orientation: str, cleanup_in
         
         return None
 
-def check_greece_workflow_directories(video_config: VideoConfig = None) -> bool:
+def check_greece_workflow_directories(video_config: VideoConfigGreece) -> bool:
     """Check if all required Greece workflow directories exist."""
-    if video_config is None:
-        video_config = config
-    
     return video_config.validate_directories()
 
 if __name__ == "__main__":
+    # Initialize configuration for current project
+    config = get_local_config("3_Hector")
+    
     # Check directories before running workflow
-    if check_greece_workflow_directories():
+    if check_greece_workflow_directories(config):
         build_all = True 
         
-        # Create all four video variants using the centralized config
-        create_complete_video_for_greece(language="EN", orientation="horizontal", cleanup_intermediate=False, build_all=build_all, video_config = None) 
-        # create_complete_video_for_greece(language="RU", orientation="horizontal", cleanup_intermediate=False, build_all=build_all) 
-        # create_complete_video_for_greece(language="EN", orientation="vertical", cleanup_intermediate=False, build_all=build_all) 
-        # create_complete_video_for_greece(language="RU", orientation="vertical", cleanup_intermediate=False, build_all=build_all) 
+        # Create all four video variants using the explicit config
+        # create_complete_video_for_greece(language="EN", orientation="horizontal", video_config=config, cleanup_intermediate=False, build_all=build_all) 
+        create_complete_video_for_greece(language="RU", orientation="horizontal", video_config=config, cleanup_intermediate=False, build_all=build_all) 
+        # create_complete_video_for_greece(language="EN", orientation="vertical", video_config=config, cleanup_intermediate=False, build_all=build_all) 
+        # create_complete_video_for_greece(language="RU", orientation="vertical", video_config=config, cleanup_intermediate=False, build_all=build_all) 
     else:
         print("⏸️  Greece workflow stopped due to missing directories.")
 
