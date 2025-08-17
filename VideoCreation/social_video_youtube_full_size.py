@@ -243,7 +243,7 @@ if __name__ == "__main__":
         build_all = True 
         
         # Create all four video variants using the centralized config
-        create_complete_video_for_greece(language="EN", orientation="horizontal", cleanup_intermediate=False, build_all=build_all) 
+        create_complete_video_for_greece(language="EN", orientation="horizontal", cleanup_intermediate=False, build_all=build_all, video_config = None) 
         # create_complete_video_for_greece(language="RU", orientation="horizontal", cleanup_intermediate=False, build_all=build_all) 
         # create_complete_video_for_greece(language="EN", orientation="vertical", cleanup_intermediate=False, build_all=build_all) 
         # create_complete_video_for_greece(language="RU", orientation="vertical", cleanup_intermediate=False, build_all=build_all) 

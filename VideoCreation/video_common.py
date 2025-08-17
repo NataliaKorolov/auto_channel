@@ -770,7 +770,12 @@ def CreateVideoFile(
 
                 current_clip = original_clip
                  
-                resized_clip = current_clip.resized(size)
+                # Use the new automatic aspect-ratio decision resize function
+                resized_clip = auto_resize_video_clip(
+                    current_clip, 
+                    size[0], 
+                    size[1]
+                )
                 
                 # # Resize the clip
                 # resized_clip = resize_and_crop_clip(current_clip, size, resize_dim)
@@ -1133,7 +1138,6 @@ def ConcatenateVideoFiles(
         print(f"Error during concatenation: {str(e)}")
         traceback.print_exc()
         return False
-        
     finally:
         # Clean up resources
         print("Cleaning up concatenation resources...")
@@ -1238,7 +1242,6 @@ def ConcatenateAudioFiles(
         print(f"Error during audio concatenation: {str(e)}")
         traceback.print_exc()
         return False
-        
     finally:
         # Clean up resources
         print("Cleaning up audio concatenation resources...")
@@ -1509,3 +1512,116 @@ def concatenate_videos_ffmpeg_with_reencoding(video_paths: List[str], output_pat
             os.unlink(filelist_path)
         except:
             pass
+
+
+        
+def resize_video_maintain_aspect(video_clip, target_width: int, target_height: int, method: str = "letterbox"):
+    """
+    Resize video while maintaining aspect ratio.
+    
+    Args:
+        video_clip: VideoFileClip to resize
+        target_width: Target width
+        target_height: Target height  
+        method: "letterbox" (add padding), "crop" (crop to fill), or "stretch" (ignore aspect ratio)
+    
+    Returns:
+        Resized VideoFileClip
+    """
+    if method == "stretch":
+        return video_clip.resized(width=target_width, height=target_height)
+    
+    video_aspect = video_clip.w / video_clip.h
+    target_aspect = target_width / target_height
+    
+    if abs(video_aspect - target_aspect) < 0.01:  # Same aspect ratio
+        return video_clip.resized(width=target_width, height=target_height)
+    
+    if method == "letterbox":
+        # Resize maintaining aspect ratio, then add padding
+        if video_aspect > target_aspect:
+            # Video is wider - fit to width, add top/bottom padding
+            resized = video_clip.resized(width=target_width)
+        else:
+            # Video is taller - fit to height, add left/right padding
+            resized = video_clip.resized(height=target_height)
+        
+        # Add padding to match exact target size
+        positioned = resized.with_position('center')
+        return CompositeVideoClip([positioned], size=(target_width, target_height), bg_color=(0,0,0))
+    
+    elif method == "crop":
+        # Resize to fill target area, then crop
+        if video_aspect > target_aspect:
+            # Video is wider - resize by height, then crop width
+            resized = video_clip.resized(height=target_height)
+            x_center = resized.w // 2
+            x1 = x_center - target_width // 2
+            x2 = x1 + target_width
+            return resized.cropped(x1=max(0, x1), x2=min(resized.w, x2))
+        else:
+            # Video is taller - resize by width, then crop height
+            resized = video_clip.resized(width=target_width)
+            y_center = resized.h // 2
+            y1 = y_center - target_height // 2
+            y2 = y1 + target_height
+            return resized.cropped(y1=max(0, y1), y2=min(resized.h, y2))
+    
+    else:
+        raise ValueError(f"Unknown resize method: {method}. Use 'letterbox', 'crop', or 'stretch'")
+
+def auto_resize_video_clip(video_clip, target_width: int, target_height: int):
+    """
+    Automatically resize video clip using the best method based on aspect ratios.
+    
+    Logic:
+    - Horizontal to Horizontal: "stretch" (maintain compatibility)
+    - Horizontal to Vertical: "crop" (fill frame, lose some content)
+    - Vertical to Horizontal: "letterbox" (preserve content, add padding)
+    - Vertical to Vertical: "stretch" (maintain compatibility)
+    
+    Args:
+        video_clip: VideoFileClip to resize
+        target_width: Target width
+        target_height: Target height
+    
+    Returns:
+        Resized VideoFileClip
+    """
+    # Calculate aspect ratios
+    source_aspect = video_clip.w / video_clip.h
+    target_aspect = target_width / target_height
+    
+    # Determine if source and target are horizontal or vertical
+    source_is_horizontal = source_aspect > 1.0
+    target_is_horizontal = target_aspect > 1.0
+    
+    # Decision logic
+    if source_is_horizontal and target_is_horizontal:
+        # Horizontal to Horizontal - use stretch for compatibility
+        method = "stretch"
+        reason = "Both horizontal - stretching for compatibility"
+        
+    elif source_is_horizontal and not target_is_horizontal:
+        # Horizontal to Vertical - use crop to fill frame
+        method = "crop"
+        reason = "Horizontal to vertical - cropping to fill frame"
+        
+    elif not source_is_horizontal and target_is_horizontal:
+        # Vertical to Horizontal - use letterbox to preserve content
+        method = "letterbox"
+        reason = "Vertical to horizontal - letterboxing to preserve content"
+        
+    else:
+        # Vertical to Vertical - use stretch for compatibility
+        method = "stretch"
+        reason = "Both vertical - stretching for compatibility"
+    
+    print(f"📐 Auto-resize decision:")
+    print(f"   Source: {video_clip.w}x{video_clip.h} (aspect: {source_aspect:.2f}) - {'Horizontal' if source_is_horizontal else 'Vertical'}")
+    print(f"   Target: {target_width}x{target_height} (aspect: {target_aspect:.2f}) - {'Horizontal' if target_is_horizontal else 'Vertical'}")
+    print(f"   Method: {method} - {reason}")
+    
+    # Use the existing resize function with the determined method
+    return resize_video_maintain_aspect(video_clip, target_width, target_height, method)
+
