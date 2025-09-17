@@ -230,11 +230,11 @@ def check_greece_workflow_directories(video_config: VideoConfigGreece) -> bool:
 
 if __name__ == "__main__":
     # Initialize configuration for current project
-    config = get_local_config("3_Hector")
+    config = get_local_config("4_Odysseus")
     
     # Check directories before running workflow
     if check_greece_workflow_directories(config):
-        build_all = True 
+        build_all = False 
         
         # Create all four video variants using the explicit config
         # create_complete_video_for_greece(language="EN", orientation="horizontal", video_config=config, cleanup_intermediate=False, build_all=build_all) 
